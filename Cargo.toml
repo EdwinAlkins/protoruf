@@ -1,0 +1,20 @@
+[package]
+name = "protoruf"
+version = "0.1.1"
+edition = "2021"
+
+[lib]
+name = "protoruf"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+pyo3 = { version = "0.23", features = ["extension-module"] }
+prost = "0.13"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+prost-reflect = "0.14"
+prost-build = "0.13"
+protox = "0.7"
+
+[features]
+extension-module = ["pyo3/extension-module"]

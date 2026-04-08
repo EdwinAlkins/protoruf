@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package message;
+
+message Message {
+    string id = 1;
+    string content = 2;
+    int32 priority = 3;
+    repeated string tags = 4;
+    Metadata metadata = 5;
+}
+
+message Metadata {
+    string author = 1;
+    int64 created_at = 2;
+    map<string, string> attributes = 3;
+}

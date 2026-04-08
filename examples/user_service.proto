@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+package user;
+
+// User message representing a system user
+message User {
+    string id = 1;
+    string email = 2;
+    string username = 3;
+    UserRole role = 4;
+    Profile profile = 5;
+    repeated string permissions = 6;
+    bool active = 7;
+    int64 created_at = 8;
+}
+
+// User roles
+enum UserRole {
+    ROLE_UNSPECIFIED = 0;
+    ROLE_ADMIN = 1;
+    ROLE_MODERATOR = 2;
+    ROLE_USER = 3;
+    ROLE_GUEST = 4;
+}
+
+// User profile information
+message Profile {
+    string first_name = 1;
+    string last_name = 2;
+    string bio = 3;
+    string avatar_url = 4;
+    map<string, string> social_links = 5;
+}
+
+// Request to create a new user
+message CreateUserRequest {
+    string email = 1;
+    string username = 2;
+    string password = 3;
+    Profile profile = 4;
+}
+
+// Response after creating a user
+message CreateUserResponse {
+    User user = 1;
+    string token = 2;
+}
+
+// Request to get a user by ID
+message GetUserRequest {
+    string user_id = 1;
+}
+
+// List of users for pagination
+message UserList {
+    repeated User users = 1;
+    int32 total = 2;
+    string next_page_token = 3;
+}

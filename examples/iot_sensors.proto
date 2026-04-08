@@ -1,0 +1,124 @@
+syntax = "proto3";
+
+package iot;
+
+// Sensor reading from an IoT device
+message SensorReading {
+    string device_id = 1;
+    string sensor_id = 2;
+    int64 timestamp = 3;
+    SensorType type = 4;
+    SensorData data = 5;
+    map<string, string> metadata = 6;
+}
+
+// Types of sensors
+enum SensorType {
+    SENSOR_UNSPECIFIED = 0;
+    SENSOR_TEMPERATURE = 1;
+    SENSOR_HUMIDITY = 2;
+    SENSOR_PRESSURE = 3;
+    SENSOR_LIGHT = 4;
+    SENSOR_MOTION = 5;
+    SENSOR_AIR_QUALITY = 6;
+}
+
+// Sensor data - using oneof for type-specific data
+message SensorData {
+    oneof value {
+        TemperatureData temperature = 1;
+        HumidityData humidity = 2;
+        PressureData pressure = 3;
+        LightData light = 4;
+        MotionData motion = 5;
+        AirQualityData air_quality = 6;
+    }
+}
+
+// Temperature reading in Celsius
+message TemperatureData {
+    double celsius = 1;
+    double fahrenheit = 2;
+    string unit = 3;
+}
+
+// Humidity reading as percentage
+message HumidityData {
+    double relative_humidity = 1;
+    double absolute_humidity = 2;
+    string unit = 3;
+}
+
+// Atmospheric pressure
+message PressureData {
+    double hpa = 1;
+    double inhg = 2;
+    string unit = 3;
+}
+
+// Light intensity
+message LightData {
+    double lux = 1;
+    int32 brightness_percent = 2;
+}
+
+// Motion detection
+message MotionData {
+    bool detected = 1;
+    double confidence = 2;
+    int32 motion_level = 3;
+}
+
+// Air quality metrics
+message AirQualityData {
+    double pm2_5 = 1;
+    double pm10 = 2;
+    double co2_ppm = 3;
+    double voc_index = 4;
+    string quality_level = 5;
+}
+
+// Batch of sensor readings for efficient transmission
+message SensorBatch {
+    string gateway_id = 1;
+    int64 batch_timestamp = 2;
+    repeated SensorReading readings = 3;
+    BatchStatus status = 4;
+}
+
+// Batch processing status
+enum BatchStatus {
+    BATCH_UNSPECIFIED = 0;
+    BATCH_COMPLETE = 1;
+    BATCH_PARTIAL = 2;
+    BATCH_ERROR = 3;
+}
+
+// Device registration
+message DeviceRegistration {
+    string device_id = 1;
+    string device_type = 2;
+    string firmware_version = 3;
+    string location = 4;
+    repeated string capabilities = 5;
+    int64 registered_at = 6;
+}
+
+// Alert from IoT device
+message DeviceAlert {
+    string device_id = 1;
+    AlertLevel level = 2;
+    string alert_type = 3;
+    string message = 4;
+    int64 timestamp = 5;
+    map<string, string> context = 6;
+}
+
+// Alert severity levels
+enum AlertLevel {
+    ALERT_UNSPECIFIED = 0;
+    ALERT_INFO = 1;
+    ALERT_WARNING = 2;
+    ALERT_CRITICAL = 3;
+    ALERT_EMERGENCY = 4;
+}
