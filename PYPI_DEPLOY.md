@@ -72,7 +72,8 @@ Update the version in both files:
 ### 2. Commit and push
 
 ```bash
-git add Cargo.toml pyproject.toml
+cargo clean && cargo generate-lockfile
+git add Cargo.toml Cargo.lock pyproject.toml
 git commit -m "bump version to 0.1.0"
 git push
 ```
