@@ -7,7 +7,7 @@ Guide complet pour installer et configurer `protoruf`.
 ### Système
 
 - **OS**: Linux, macOS, ou Windows
-- **Python**: 3.13 ou supérieur
+- **Python**: 3.12 ou supérieur
 - **Rust**: 1.70 ou supérieur (pour le développement)
 
 ### Outils recommandés
@@ -23,7 +23,7 @@ Guide complet pour installer et configurer `protoruf`.
 
 ```bash
 # Cloner le repository
-git clone https://github.com/votre-org/protoruf.git
+git clone https://github.com/EdwinAlkins/protoruf
 cd protoruf
 
 # Installer les dépendances et la librairie
@@ -66,23 +66,23 @@ rustc --version
 cargo --version
 ```
 
-### 2. Installer Python 3.13+
+### 2. Installer Python 3.12+
 
 #### Avec uv (recommandé)
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
-uv python install 3.13
+uv python install 3.12
 ```
 
 #### Autre méthode
 
 ```bash
 # Ubuntu/Debian
-sudo apt install python3.13 python3.13-venv python3.13-dev
+sudo apt install python3.12 python3.12-venv python3.12-dev
 
 # macOS (Homebrew)
-brew install python@3.13
+brew install python@3.12
 
 # Windows
 # Téléchargez depuis python.org
@@ -215,10 +215,10 @@ uv run maturin develop
 
 ### Problèmes de version Python
 
-Vérifiez que Python 3.13 est utilisé:
+Vérifiez que Python 3.12 est utilisé:
 
 ```bash
-uv python pin 3.13
+uv python pin 3.12
 uv sync
 ```
 
@@ -252,7 +252,7 @@ maturin build --release
 
 ```bash
 # Pour Linux ARM64
-maturin build --release --target aarch64-unknown-linux-gnu
+maturin build --release
 
 # Pour macOS
 maturin build --release --target x86_64-apple-darwin
@@ -265,7 +265,6 @@ maturin build --release --target x86_64-apple-darwin
 ### Python
 
 - `pydantic>=2.0` - Validation de données
-- `protobuf>=5.0` - Support Protobuf
 
 ### Rust
 

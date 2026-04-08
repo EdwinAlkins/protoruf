@@ -6,11 +6,10 @@ build-backend = "maturin"
 name = "protoruf"
 version = "0.1.0"
 description = "A Python library written in Rust for JSON/Protobuf conversion"
-readme = "README.md"
+readme = "PYPI_README.md"
 requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2.0",
-    "protobuf>=5.0",
 ]
 
 [project.optional-dependencies]

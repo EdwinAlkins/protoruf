@@ -11,7 +11,7 @@ Ce document décrit le travail nécessaire pour supporter Python 3.14 dans `prot
 | Élément | Version |
 |---------|---------|
 | **PyO3** | 0.23 |
-| **Python minimum** | 3.13 |
+| **Python minimum** | 3.12 |
 | **Édition Rust** | 2021 |
 | **Statut Python 3.14** | ❌ Non supporté |
 

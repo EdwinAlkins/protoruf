@@ -30,11 +30,11 @@ Documentation complète pour la bibliothèque `protoruf`.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     Python Application                       │
+│                     Python Application                      │
 ├─────────────────────────────────────────────────────────────┤
 │  compile_proto()  │  json_to_protobuf()  │  protobuf_to_json│
 ├─────────────────────────────────────────────────────────────┤
-│              PyO3 Python Bindings (Rust)                     │
+│              PyO3 Python Bindings (Rust)                    │
 ├─────────────────────────────────────────────────────────────┤
 │  protox (Rust)   │  prost-reflect       │  serde_json       │
 └─────────────────────────────────────────────────────────────┘

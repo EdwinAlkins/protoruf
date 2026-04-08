@@ -17,13 +17,13 @@ La bibliothèque Rust expose des fonctions Python via PyO3 et utilise:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    Python (PyO3)                             │
+│                    Python (PyO3)                            │
 │  compile_proto()  │  json_to_protobuf()  │  protobuf_to_json│
 ├─────────────────────────────────────────────────────────────┤
-│                    Rust Core                                 │
+│                    Rust Core                                │
 │  protox::compile() │  DynamicMessage     │  serde_json      │
 ├─────────────────────────────────────────────────────────────┤
-│                    Protobuf                                  │
+│                    Protobuf                                 │
 │  DescriptorPool    │  MessageDescriptor  │  FieldDescriptor │
 └─────────────────────────────────────────────────────────────┘
 ```
