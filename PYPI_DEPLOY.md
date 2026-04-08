@@ -73,7 +73,7 @@ Update the version in both files:
 
 ```bash
 git add Cargo.toml pyproject.toml
-git commit -m "bump version to 0.1.2"
+git commit -m "bump version to 0.1.0"
 git push
 ```
 
@@ -96,14 +96,14 @@ uv run maturin develop
 ### 4. Create a Git tag and release
 
 ```bash
-git tag v0.1.2
-git push origin v0.1.2
+git tag v0.1.0
+git push origin v0.1.0
 ```
 
 Then go to GitHub → your repo → **Releases** → **Draft a new release**:
 
-- **Tag**: `v0.1.2`
-- **Title**: `v0.1.2`
+- **Tag**: `v0.1.0`
+- **Title**: `v0.1.0`
 - **Description**: changelog/release notes
 - Click **Publish release**
 
