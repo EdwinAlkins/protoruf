@@ -8,21 +8,20 @@ on:
 jobs:
   linux:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        target: [x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu]
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - uses: PyO3/maturin-action@v1
         with:
           command: build
-          args: --release --target ${{ matrix.target }}
+          args: --release --out dist -i python3.12
           manylinux: auto
-          interpreter: python3.12
       - uses: actions/upload-artifact@v4
         with:
-          name: wheels-linux-${{ matrix.target }}
-          path: target/wheels
+          name: wheels-linux-x86_64
+          path: dist
 
   windows:
     runs-on: windows-latest
@@ -34,18 +33,14 @@ jobs:
       - uses: PyO3/maturin-action@v1
         with:
           command: build
-          args: --release
-          interpreter: python3.12
+          args: --release --out dist -i python3.12
       - uses: actions/upload-artifact@v4
         with:
-          name: wheels-windows
-          path: target/wheels
+          name: wheels-windows-x86_64
+          path: dist
 
   macos:
     runs-on: macos-latest
-    strategy:
-      matrix:
-        target: [x86_64-apple-darwin, aarch64-apple-darwin]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -54,12 +49,11 @@ jobs:
       - uses: PyO3/maturin-action@v1
         with:
           command: build
-          args: --release --target ${{ matrix.target }}
-          interpreter: python3.12
+          args: --release --out dist -i python3.12
       - uses: actions/upload-artifact@v4
         with:
-          name: wheels-macos-${{ matrix.target }}
-          path: target/wheels
+          name: wheels-macos-x86_64
+          path: dist
 
   sdist:
     runs-on: ubuntu-latest
@@ -67,12 +61,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: PyO3/maturin-action@v1
         with:
-          command: build
-          args: --release --sdist
+          command: sdist
+          args: --out dist
       - uses: actions/upload-artifact@v4
         with:
           name: wheels-sdist
-          path: target/wheels
+          path: dist
 
   publish:
     needs: [linux, windows, macos, sdist]
