@@ -1,5 +1,21 @@
 # protoruf
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/EdwinAlkins/protoruf/main/docs/assets/logo.png" alt="protoruf logo" width="200">
+</p>
+
+<p align="center">
+  <strong>High-performance JSON ↔ Protobuf conversion for Python, powered by Rust</strong>
+</p>
+
+<p align="center">
+  <a href="https://EdwinAlkins.github.io/protoruf/">📖 Documentation</a> •
+  <a href="https://github.com/EdwinAlkins/protoruf">💻 Source</a> •
+  <a href="https://github.com/EdwinAlkins/protoruf/issues">🐛 Issues</a>
+</p>
+
+---
+
 A high-performance Python library written in Rust for converting between JSON and Protobuf messages.
 
 ## Features
@@ -106,9 +122,10 @@ result = protobuf_to_json(protobuf_bytes, descriptor, message_type="message.Mess
 
 ## Links
 
-- **Documentation:** https://github.com/EdwinAlkins/protoruf/blob/main/doc/index.md
-- **Source Code:** https://github.com/EdwinAlkins/protoruf
-- **Bug Reports:** https://github.com/EdwinAlkins/protoruf/issues
+- **📖 Full Documentation:** https://EdwinAlkins.github.io/protoruf/
+- **💻 Source Code:** https://github.com/EdwinAlkins/protoruf
+- **🐛 Bug Reports:** https://github.com/EdwinAlkins/protoruf/issues
+- **📦 PyPI:** https://pypi.org/project/protoruf/
 
 ## License
 

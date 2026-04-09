@@ -12,6 +12,12 @@ dependencies = [
     "pydantic>=2.0",
 ]
 
+[project.urls]
+Homepage = "https://github.com/EdwinAlkins/protoruf"
+Documentation = "https://EdwinAlkins.github.io/protoruf/"
+Repository = "https://github.com/EdwinAlkins/protoruf"
+"Bug Tracker" = "https://github.com/EdwinAlkins/protoruf/issues"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",

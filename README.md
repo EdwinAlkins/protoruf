@@ -1,5 +1,21 @@
 # protoruf
 
+<p align="center">
+  <img src="docs/assets/logo.png" alt="protoruf logo" width="200">
+</p>
+
+<p align="center">
+  <strong>High-performance JSON ↔ Protobuf conversion for Python, powered by Rust</strong>
+</p>
+
+<p align="center">
+  <a href="https://EdwinAlkins.github.io/protoruf/">📖 Documentation</a> •
+  <a href="https://github.com/EdwinAlkins/protoruf">💻 Source</a> •
+  <a href="https://pypi.org/project/protoruf/">📦 PyPI</a>
+</p>
+
+---
+
 A high-performance Python library written in Rust for converting between JSON and Protobuf messages.
 
 ## Features
