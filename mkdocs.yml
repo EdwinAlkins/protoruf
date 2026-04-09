@@ -50,7 +50,7 @@ theme:
     - toc.follow
   icon:
     repo: fontawesome/brands/github
-  logo: material/format-align-left
+  logo: assets/logo.png
   favicon: material/favicon
   language: en
 
@@ -119,3 +119,4 @@ nav:
   - API Reference: api/reference.md
   - Development:
       - Contributing: development/contributing.md
+      - Deployment: development/deployment.md
