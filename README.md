@@ -51,6 +51,35 @@ json_str = protobuf_to_json(protobuf_bytes, descriptor, message_type="message.Me
 print(json_str)
 ```
 
+### Direct Pydantic Integration
+
+protoruf provides built-in functions for seamless Pydantic model conversion:
+
+```python
+from pydantic import BaseModel, Field
+from protoruf import compile_proto, pydantic_to_protobuf, protobuf_to_pydantic
+
+# Define your models
+class Message(BaseModel):
+    id: str = ""
+    content: str = ""
+    priority: int = 0
+    tags: list[str] = []
+
+# Compile proto
+descriptor = compile_proto("proto/message.proto")
+
+# Create a Pydantic model
+msg = Message(id="123", content="Hello", priority=1, tags=["greeting"])
+
+# Convert directly from Pydantic to Protobuf (message_type is required)
+protobuf_bytes = pydantic_to_protobuf(msg, descriptor, message_type="message.Message")
+
+# Convert Protobuf back to Pydantic model
+result = protobuf_to_pydantic(protobuf_bytes, descriptor, Message, message_type="message.Message")
+print(result.content)  # Output: Hello
+```
+
 ### With Pydantic models (in your own code)
 
 You can use Pydantic models in your application code to structure your data:
@@ -200,6 +229,27 @@ Convert a Protobuf message to a JSON string.
 - **pretty**: If `True`, format JSON with indentation
 
 Returns the JSON string representation.
+
+### `pydantic_to_protobuf(pydantic_model, descriptor_bytes, message_type)`
+
+Convert a Pydantic model directly to a Protobuf message.
+
+- **pydantic_model**: Pydantic model instance to convert
+- **descriptor_bytes**: Compiled protobuf descriptor set
+- **message_type**: Full message type name (e.g., `"user.User"`, `"ecommerce.Order"`)
+
+Returns the Protobuf message as bytes.
+
+### `protobuf_to_pydantic(protobuf_bytes, descriptor_bytes, model_class, message_type)`
+
+Convert a Protobuf message directly to a Pydantic model instance.
+
+- **protobuf_bytes**: Protobuf message as bytes
+- **descriptor_bytes**: Compiled protobuf descriptor set
+- **model_class**: The Pydantic model class to instantiate
+- **message_type**: Full message type name (e.g., `"user.User"`)
+
+Returns an instance of the specified Pydantic model class.
 
 ## License
 

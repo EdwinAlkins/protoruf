@@ -102,11 +102,42 @@ Convert a Protobuf message to a JSON string.
 
 **Returns:** `str` — The JSON representation.
 
+---
+
+### `pydantic_to_protobuf(pydantic_model, descriptor_bytes, message_type)`
+
+Convert a Pydantic model directly to a Protobuf message.
+
+| Parameter          | Type       | Description                                       |
+|--------------------|------------|---------------------------------------------------|
+| `pydantic_model`   | `BaseModel`| Pydantic model instance to convert                |
+| `descriptor_bytes` | `bytes`    | Compiled protobuf descriptor set                  |
+| `message_type`     | `str`      | Full message type name (e.g. `"message.Message"`) |
+
+**Returns:** `bytes` — The Protobuf message.
+
+---
+
+### `protobuf_to_pydantic(protobuf_bytes, descriptor_bytes, model_class, message_type)`
+
+Convert a Protobuf message directly to a Pydantic model instance.
+
+| Parameter          | Type       | Description                                       |
+|--------------------|------------|---------------------------------------------------|
+| `protobuf_bytes`   | `bytes`    | Protobuf message as bytes                         |
+| `descriptor_bytes` | `bytes`    | Compiled protobuf descriptor set                  |
+| `model_class`      | `Type[T]`  | The Pydantic model class to instantiate           |
+| `message_type`     | `str`      | Full message type name (e.g. `"message.Message"`) |
+
+**Returns:** `T` — An instance of the specified Pydantic model class.
+
 ## Usage with Pydantic
+
+protoruf provides built-in functions for seamless Pydantic integration:
 
 ```python
 from pydantic import BaseModel
-from protoruf import compile_proto, json_to_protobuf, protobuf_to_json
+from protoruf import compile_proto, pydantic_to_protobuf, protobuf_to_pydantic
 
 class Message(BaseModel):
     id: str = ""
@@ -116,8 +147,11 @@ class Message(BaseModel):
 descriptor = compile_proto("message.proto")
 msg = Message(id="123", content="Hello", priority=1)
 
-protobuf_bytes = json_to_protobuf(msg.model_dump_json(), descriptor, message_type="message.Message")
-result = protobuf_to_json(protobuf_bytes, descriptor, message_type="message.Message")
+# Direct conversion from Pydantic to Protobuf
+protobuf_bytes = pydantic_to_protobuf(msg, descriptor, message_type="message.Message")
+
+# Direct conversion from Protobuf back to Pydantic
+result = protobuf_to_pydantic(protobuf_bytes, descriptor, Message, message_type="message.Message")
 ```
 
 ## Links

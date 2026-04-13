@@ -4,7 +4,7 @@ This guide covers the core functionality of protoruf: converting between JSON an
 
 ## Core Functions
 
-protoruf provides four main functions:
+protoruf provides six main functions:
 
 | Function | Description |
 |----------|-------------|
@@ -12,6 +12,8 @@ protoruf provides four main functions:
 | `load_descriptor()` | Load a pre-compiled descriptor from a file |
 | `json_to_protobuf()` | Convert JSON string to Protobuf bytes |
 | `protobuf_to_json()` | Convert Protobuf bytes to JSON string |
+| `pydantic_to_protobuf()` | Convert Pydantic model directly to Protobuf bytes |
+| `protobuf_to_pydantic()` | Convert Protobuf bytes directly to Pydantic model |
 
 ## Compiling Proto Files
 
@@ -246,6 +248,87 @@ except ValueError as e:
 - **`ValueError`**: Invalid JSON or message type not found in descriptor
 - **`RuntimeError`**: Protobuf decoding or serialization failure
 - **`FileNotFoundError`**: Descriptor file does not exist
+
+## Pydantic Integration
+
+protoruf provides built-in functions for seamless Pydantic model conversion, eliminating the need for manual JSON conversion.
+
+### Pydantic → Protobuf
+
+Convert a Pydantic model directly to Protobuf:
+
+```python
+from pydantic import BaseModel
+from protoruf import compile_proto, pydantic_to_protobuf
+
+class Message(BaseModel):
+    id: str = ""
+    content: str = ""
+    priority: int = 0
+    tags: list[str] = []
+
+descriptor = compile_proto("message.proto")
+msg = Message(id="123", content="Hello", priority=1, tags=["greeting"])
+
+# Direct conversion (message_type is required)
+protobuf_bytes = pydantic_to_protobuf(msg, descriptor, message_type="message.Message")
+```
+
+### Protobuf → Pydantic
+
+Convert Protobuf bytes directly to a Pydantic model instance:
+
+```python
+from protoruf import protobuf_to_pydantic
+
+# Direct conversion to Pydantic model
+result = protobuf_to_pydantic(
+    protobuf_bytes,
+    descriptor,
+    Message,
+    message_type="message.Message"
+)
+
+print(result.content)  # Output: Hello
+print(result.tags)     # Output: ['greeting']
+```
+
+### Complete Pydantic Workflow
+
+```python
+from pydantic import BaseModel
+from protoruf import compile_proto, pydantic_to_protobuf, protobuf_to_pydantic
+
+class Metadata(BaseModel):
+    author: str = ""
+    timestamp: int = 0
+
+class Message(BaseModel):
+    id: str = ""
+    content: str = ""
+    priority: int = 0
+    metadata: Metadata = None
+
+# Compile proto
+descriptor = compile_proto("message.proto")
+
+# Create message with nested models
+msg = Message(
+    id="123",
+    content="Hello from Pydantic!",
+    priority=1,
+    metadata=Metadata(author="Alice", timestamp=1234567890)
+)
+
+# Convert to Protobuf
+protobuf_bytes = pydantic_to_protobuf(msg, descriptor, message_type="message.Message")
+
+# Convert back to Pydantic
+result = protobuf_to_pydantic(protobuf_bytes, descriptor, Message, message_type="message.Message")
+
+assert result.content == "Hello from Pydantic!"
+assert result.metadata.author == "Alice"
+```
 
 ## Next Steps
 

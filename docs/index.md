@@ -95,6 +95,7 @@ print(result)
 │                     Python Application                      │
 │              compile_proto()  │  json_to_protobuf()         │
 │              protobuf_to_json()  │  load_descriptor()       │
+│      pydantic_to_protobuf()  │  protobuf_to_pydantic()      │
 ├─────────────────────────────────────────────────────────────┤
 │                   PyO3 Rust Bindings                        │
 ├─────────────────────────────────────────────────────────────┤
@@ -113,7 +114,7 @@ print(result)
 | **Repeated Fields** | Handle lists and arrays seamlessly |
 | **Maps** | Convert dictionary structures |
 | **Oneof Fields** | Support for union types |
-| **Pydantic Integration** | Works seamlessly with Pydantic models |
+| **Pydantic Integration** | Direct conversion with `pydantic_to_protobuf()` and `protobuf_to_pydantic()` |
 
 ## Next Steps
 

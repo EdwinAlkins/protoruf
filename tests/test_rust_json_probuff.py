@@ -8,6 +8,8 @@ from protoruf import (
     json_to_protobuf,
     load_descriptor,
     protobuf_to_json,
+    protobuf_to_pydantic,
+    pydantic_to_protobuf
 )
 from tests.test_models import Message
 
@@ -98,3 +100,52 @@ def test_compile_proto():
     descriptor = compile_proto(PROTO_PATH)
     assert isinstance(descriptor, bytes)
     assert len(descriptor) > 0
+
+
+def test_pydantic_to_protobuf():
+    """Test pydantic to protobuf conversion."""
+    descriptor = get_descriptor()
+
+    msg = Message(
+        id="456",
+        content="Pydantic test",
+        priority=3,
+        tags=["pydantic"],
+        metadata={"author": "Bob", "created_at": 9876543210},
+    )
+    protobuf_bytes = pydantic_to_protobuf(msg, descriptor, MESSAGE_TYPE)
+    assert isinstance(protobuf_bytes, bytes)
+    assert len(protobuf_bytes) > 0
+
+    result_json = protobuf_to_json(protobuf_bytes, descriptor, message_type=MESSAGE_TYPE)
+    result_data = json.loads(result_json)
+
+    assert result_data["id"] == "456"
+    assert result_data["content"] == "Pydantic test"
+    assert result_data["priority"] == 3
+    assert result_data["tags"] == ["pydantic"]
+    assert result_data["metadata"]["author"] == "Bob"
+    assert result_data["metadata"]["created_at"] == 9876543210
+
+
+def test_protobuf_to_pydantic():
+    """Test protobuf to pydantic conversion."""
+    descriptor = get_descriptor()
+
+    msg = Message(
+        id="456",
+        content="Pydantic test",
+        priority=3,
+        tags=["pydantic"],
+        metadata={"author": "Bob", "created_at": 9876543210},
+    )
+    json_data = msg.model_dump_json()
+    protobuf_bytes = json_to_protobuf(json_data, descriptor, MESSAGE_TYPE)
+
+    result_msg = protobuf_to_pydantic(protobuf_bytes, descriptor, Message, MESSAGE_TYPE)
+    assert result_msg.id == "456"
+    assert result_msg.content == "Pydantic test"
+    assert result_msg.priority == 3
+    assert result_msg.tags == ["pydantic"]
+    assert result_msg.metadata.author == "Bob"
+    assert result_msg.metadata.created_at == 9876543210

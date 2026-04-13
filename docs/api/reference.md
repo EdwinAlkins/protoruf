@@ -182,6 +182,111 @@ json_str = protobuf_to_json(
 )
 ```
 
+---
+
+### `pydantic_to_protobuf()`
+
+Convert a Pydantic model directly to a Protobuf message.
+
+```python
+def pydantic_to_protobuf(
+    pydantic_model: BaseModel,
+    descriptor_bytes: bytes,
+    message_type: str,
+) -> bytes
+```
+
+#### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `pydantic_model` | `BaseModel` | Yes | Pydantic model instance to convert |
+| `descriptor_bytes` | `bytes` | Yes | Compiled descriptor set from `compile_proto()` or `load_descriptor()` |
+| `message_type` | `str` | Yes | Full message type name (e.g., `"user.User"`, `"ecommerce.Order"`) |
+
+#### Returns
+
+`bytes` — Protobuf-encoded message.
+
+#### Raises
+
+- `ValueError` — If Pydantic model is invalid or message type is not found in descriptor
+- `RuntimeError` — If Protobuf serialization fails
+
+#### Example
+
+```python
+from pydantic import BaseModel
+from protoruf import pydantic_to_protobuf
+
+class Message(BaseModel):
+    id: str = ""
+    content: str = ""
+    priority: int = 0
+
+msg = Message(id="123", content="Hello", priority=1)
+
+protobuf_bytes = pydantic_to_protobuf(
+    msg,
+    descriptor,
+    message_type="message.Message"
+)
+```
+
+---
+
+### `protobuf_to_pydantic()`
+
+Convert a Protobuf message directly to a Pydantic model instance.
+
+```python
+def protobuf_to_pydantic(
+    protobuf_bytes: bytes,
+    descriptor_bytes: bytes,
+    model_class: Type[T],
+    message_type: str,
+) -> T
+```
+
+#### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `protobuf_bytes` | `bytes` | Yes | Protobuf-encoded message |
+| `descriptor_bytes` | `bytes` | Yes | Compiled descriptor set |
+| `model_class` | `Type[T]` | Yes | The Pydantic model class to instantiate |
+| `message_type` | `str` | Yes | Full message type name (e.g., `"user.User"`) |
+
+#### Returns
+
+`T` — An instance of the specified Pydantic model class.
+
+#### Raises
+
+- `RuntimeError` — If Protobuf decoding or JSON serialization fails
+- `ValidationError` — If the decoded JSON doesn't match the Pydantic model schema
+
+#### Example
+
+```python
+from pydantic import BaseModel
+from protoruf import protobuf_to_pydantic
+
+class Message(BaseModel):
+    id: str = ""
+    content: str = ""
+    priority: int = 0
+
+result = protobuf_to_pydantic(
+    protobuf_bytes,
+    descriptor,
+    Message,
+    message_type="message.Message"
+)
+
+print(result.content)  # Output: Hello
+```
+
 ## Type Stubs
 
 protoruf includes complete type stubs for IDE autocomplete and type checking:
@@ -203,6 +308,7 @@ __all__ = [
     "protobuf_to_json",
     "compile_proto",
     "load_descriptor",
+    "protobuf_to_pydantic",
 ]
 ```
 
