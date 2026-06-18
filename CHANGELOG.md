@@ -5,6 +5,41 @@ All notable changes to **protoruf** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.5] - 2026-06-18
+
+A follow-up to 0.1.4 focused on **concurrency** and **build ergonomics**: the
+descriptor cache now reads in parallel, and heavy link-time optimization no
+longer slows down every local rebuild.
+
+### Changed
+
+- **`DescriptorCache` now uses an `RwLock` instead of a `Mutex`** for its
+  memoized descriptor lookups (via `parking_lot`). Concurrent conversions sharing
+  a cache now take a shared read lock on the fast path and only escalate to a
+  write lock the first time each message type is resolved (with a double-check to
+  avoid races). This improves throughput when a single cache is shared across
+  many threads.
+- **LTO and `codegen-units = 1` moved from the `release` profile to a new opt-in
+  `dist` profile.** Full LTO is expensive at compile time and was slowing down
+  every local rebuild (`uv sync` / `maturin develop`, which build in release by
+  default). Published wheels are now built with `maturin build --profile dist`,
+  which also adds `strip = true`. `panic = "abort"` is deliberately left unset to
+  preserve PyO3's panic-to-exception handling.
+
+### Performance
+
+- `protobuf_to_json` now pre-allocates its output buffer based on the input size
+  (~3× the protobuf wire size), avoiding repeated reallocations as the JSON
+  string grows.
+
+### Dependencies
+
+- Added `parking_lot` 0.12.
+
+### Compatibility
+
+- No breaking changes. The public API is unchanged from 0.1.4.
+
 ## [0.1.4] - 2026-06-18
 
 This release focuses on **performance** and **correctness**: a new cached
@@ -75,4 +110,5 @@ Without the cache, protoruf is roughly at parity with (slightly slower than)
 `google.protobuf`, which is why `DescriptorCache` is recommended for any
 high-throughput workload.
 
+[0.1.5]: https://github.com/EdwinAlkins/protoruf/releases/tag/v0.1.5
 [0.1.4]: https://github.com/EdwinAlkins/protoruf/releases/tag/v0.1.4

@@ -17,7 +17,7 @@ __all__ = [
     "protobuf_to_pydantic",
     "DescriptorCache",
 ]
-__version__ = "0.1.4"
+__version__ = "0.1.5"
 
 # Pre-decoded descriptor pool. Build it once and reuse it across conversions to
 # avoid re-decoding the descriptor set on every call (the dominant cost).
