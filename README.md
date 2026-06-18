@@ -133,7 +133,7 @@ See the `examples/` directory for more usage examples:
 
 ```bash
 # Install dependencies
-uv sync
+uv sync --group benchmark --group docs
 
 # Build the Rust extension
 uv run maturin develop
