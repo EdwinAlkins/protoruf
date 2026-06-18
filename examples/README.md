@@ -73,6 +73,19 @@ Shows integration with Pydantic for:
 uv run python examples/04_pydantic_integration.py
 ```
 
+### 5. High-Throughput with DescriptorCache
+**File:** `05_descriptor_cache.py`  
+**Proto:** `user_service.proto`
+
+Shows the recommended pattern for converting many messages:
+- Decoding the descriptor pool once with `DescriptorCache`
+- Reusing one cache instance for every message type
+- Benchmark vs the free functions (≈10× speedup)
+
+```bash
+uv run python examples/05_descriptor_cache.py
+```
+
 ## Quick Start
 
 ```python
@@ -116,6 +129,14 @@ Convert Protobuf bytes to JSON string.
 - **descriptor_bytes**: Compiled descriptor set
 - **pretty**: If True, format JSON with indentation
 - **Returns**: JSON string
+
+### `DescriptorCache(descriptor_bytes)`
+
+Reusable, pre-decoded descriptor pool for high-throughput conversion. Decodes the
+pool once instead of on every call (≈7–14× faster in hot loops).
+
+- **`json_to_protobuf(json_str, message_type)`** → Protobuf bytes
+- **`protobuf_to_json(protobuf_bytes, message_type, pretty=False)`** → JSON string
 
 ## Proto Files
 

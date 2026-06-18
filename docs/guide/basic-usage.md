@@ -15,6 +15,12 @@ protoruf provides six main functions:
 | `pydantic_to_protobuf()` | Convert Pydantic model directly to Protobuf bytes |
 | `protobuf_to_pydantic()` | Convert Protobuf bytes directly to Pydantic model |
 
+!!! tip "Converting many messages?"
+    For hot loops and long-lived services, use the
+    [`DescriptorCache`](advanced.md#1-use-descriptorcache-for-hot-loops) class
+    instead of the free functions — it decodes the descriptor once and is
+    roughly 7–14× faster.
+
 ## Compiling Proto Files
 
 Before converting, you must compile your `.proto` file into a descriptor:

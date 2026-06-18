@@ -4,7 +4,8 @@ Complete API documentation for protoruf with function signatures, parameters, an
 
 ## Python API
 
-The Python API consists of four core functions:
+The Python API consists of the core conversion functions plus the
+[`DescriptorCache`](#descriptorcache) class for high-throughput workloads:
 
 ---
 
@@ -287,6 +288,73 @@ result = protobuf_to_pydantic(
 print(result.content)  # Output: Hello
 ```
 
+---
+
+### `DescriptorCache`
+
+A reusable, pre-decoded descriptor pool.
+
+The free functions above decode the descriptor set on **every** call, which is
+the dominant cost in hot loops. `DescriptorCache` decodes the pool once (and
+memoizes resolved message descriptors), giving roughly a **7–14× speedup** when
+converting many messages. Build one instance and reuse it everywhere.
+
+```python
+class DescriptorCache:
+    def __init__(self, descriptor_bytes: bytes) -> None: ...
+    def json_to_protobuf(self, json_str: str, message_type: str) -> bytes: ...
+    def protobuf_to_json(
+        self,
+        protobuf_bytes: bytes,
+        message_type: str,
+        pretty: bool = False,
+    ) -> str: ...
+```
+
+#### Constructor
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `descriptor_bytes` | `bytes` | Yes | Compiled descriptor set from `compile_proto()` or `load_descriptor()` |
+
+Raises `ValueError` if the descriptor bytes cannot be decoded.
+
+#### Methods
+
+`json_to_protobuf(json_str, message_type) -> bytes`
+
+Convert a JSON string to a Protobuf message. Raises `ValueError` if the JSON is
+invalid or the message type is not found.
+
+`protobuf_to_json(protobuf_bytes, message_type, pretty=False) -> str`
+
+Convert a Protobuf message to a JSON string. Raises `RuntimeError` on decoding
+or serialization failure, `ValueError` if the message type is not found.
+
+A single cache instance handles every message type defined in the descriptor and
+is safe to share across threads.
+
+#### Example
+
+```python
+from protoruf import compile_proto, DescriptorCache
+
+descriptor = compile_proto("schema.proto")
+
+# Decode the pool once, reuse it for every message
+cache = DescriptorCache(descriptor)
+
+for json_data in json_stream:
+    protobuf_bytes = cache.json_to_protobuf(json_data, "user.User")
+    process(protobuf_bytes)
+
+# Round-trip back to JSON
+restored = cache.protobuf_to_json(protobuf_bytes, "user.User", pretty=True)
+```
+
+The output format is identical to the free functions (snake_case field names,
+64-bit integers as JSON numbers, enums as numbers).
+
 ## Type Stubs
 
 protoruf includes complete type stubs for IDE autocomplete and type checking:
@@ -296,6 +364,11 @@ protoruf includes complete type stubs for IDE autocomplete and type checking:
 def compile_proto(proto_path: str, include_paths: list[str] | None = None) -> bytes: ...
 def json_to_protobuf(json_str: str, descriptor_bytes: bytes, message_type: str) -> bytes: ...
 def protobuf_to_json(protobuf_bytes: bytes, descriptor_bytes: bytes, pretty: bool = False, message_type: str = ...) -> str: ...
+
+class DescriptorCache:
+    def __init__(self, descriptor_bytes: bytes) -> None: ...
+    def json_to_protobuf(self, json_str: str, message_type: str) -> bytes: ...
+    def protobuf_to_json(self, protobuf_bytes: bytes, message_type: str, pretty: bool = False) -> str: ...
 ```
 
 ## Module Exports
@@ -309,6 +382,7 @@ __all__ = [
     "compile_proto",
     "load_descriptor",
     "protobuf_to_pydantic",
+    "DescriptorCache",
 ]
 ```
 

@@ -15,8 +15,13 @@ __all__ = [
     "compile_proto",
     "load_descriptor",
     "protobuf_to_pydantic",
+    "DescriptorCache",
 ]
-__version__ = "0.1.3"
+__version__ = "0.1.4"
+
+# Pre-decoded descriptor pool. Build it once and reuse it across conversions to
+# avoid re-decoding the descriptor set on every call (the dominant cost).
+DescriptorCache = _protoruf.DescriptorCache
 
 
 def json_to_protobuf(

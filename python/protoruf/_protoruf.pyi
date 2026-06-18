@@ -20,3 +20,16 @@ def protobuf_to_json(
     pretty: bool = False,
     message_type: str = ...,
 ) -> str: ...
+
+
+class DescriptorCache:
+    """A reusable, pre-decoded descriptor pool."""
+
+    def __init__(self, descriptor_bytes: bytes) -> None: ...
+    def json_to_protobuf(self, json_str: str, message_type: str) -> bytes: ...
+    def protobuf_to_json(
+        self,
+        protobuf_bytes: bytes,
+        message_type: str,
+        pretty: bool = False,
+    ) -> str: ...

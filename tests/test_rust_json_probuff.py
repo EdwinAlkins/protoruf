@@ -9,7 +9,7 @@ from protoruf import (
     load_descriptor,
     protobuf_to_json,
     protobuf_to_pydantic,
-    pydantic_to_protobuf
+    pydantic_to_protobuf,
 )
 from tests.test_models import Message
 
@@ -50,7 +50,9 @@ def test_json_to_protobuf_to_json():
     assert len(protobuf_bytes) > 0
 
     # Protobuf -> JSON
-    result_json = protobuf_to_json(protobuf_bytes, descriptor, message_type=MESSAGE_TYPE)
+    result_json = protobuf_to_json(
+        protobuf_bytes, descriptor, message_type=MESSAGE_TYPE
+    )
     result_data = json.loads(result_json)
 
     assert result_data["id"] == "123"
@@ -88,7 +90,9 @@ def test_pydantic_integration():
     json_data = msg.model_dump_json()
     protobuf_bytes = json_to_protobuf(json_data, descriptor, MESSAGE_TYPE)
 
-    result_json = protobuf_to_json(protobuf_bytes, descriptor, message_type=MESSAGE_TYPE)
+    result_json = protobuf_to_json(
+        protobuf_bytes, descriptor, message_type=MESSAGE_TYPE
+    )
     result_data = json.loads(result_json)
 
     assert result_data["id"] == "456"
@@ -117,7 +121,9 @@ def test_pydantic_to_protobuf():
     assert isinstance(protobuf_bytes, bytes)
     assert len(protobuf_bytes) > 0
 
-    result_json = protobuf_to_json(protobuf_bytes, descriptor, message_type=MESSAGE_TYPE)
+    result_json = protobuf_to_json(
+        protobuf_bytes, descriptor, message_type=MESSAGE_TYPE
+    )
     result_data = json.loads(result_json)
 
     assert result_data["id"] == "456"
