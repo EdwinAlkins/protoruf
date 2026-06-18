@@ -20,6 +20,16 @@ protox = "0.7"
 [features]
 extension-module = ["pyo3/extension-module"]
 
-[profile.release]
-lto = true
-codegen-units = 1
+# Heavy optimization (full LTO + a single codegen unit) is very expensive at
+# compile time and would slow down every local rebuild (uv sync / maturin
+# develop build in release by default). We keep it in an opt-in `dist` profile,
+# used only to produce the published wheels: `maturin build --profile dist`.
+[profile.dist]
+inherits = "release"
+lto = "fat"          # Global Link Time Optimization
+codegen-units = 1    # Single-threaded compile for maximum LLVM optimizations
+strip = true         # Strip debug symbols from the final binary (.so / .pyd)
+# opt-level = 3 is inherited from `release` (already the default), no need to repeat it.
+# Note: deliberately NOT setting `panic = "abort"` — it defeats PyO3's
+# panic-to-exception handling, so a Rust panic would abort the whole Python
+# process instead of raising a clean Python exception.

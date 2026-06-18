@@ -9,6 +9,27 @@ cargo test --lib       # Rust tests
 
 ## Benchmarks
 
+> ⚠️ **Build in release mode first — otherwise your numbers are meaningless.**
+>
+> `uv run maturin develop` (and the editable install via `uv`) compile the Rust
+> extension in **debug** mode by default. A debug build has **no optimizations**
+> (no inlining, overflow checks enabled, …) and runs **~10-50× slower** on the
+> serde/prost code path. Benchmarking a debug `.so` makes protoruf look *slower*
+> than `google.protobuf`; with a release build it is several times faster.
+>
+> Always rebuild in release before measuring:
+>
+> ```bash
+> uv run maturin develop --release
+> ```
+>
+> Sanity check the installed artifact — release is ~3 MB, debug is ~32 MB:
+>
+> ```bash
+> ls -la python/protoruf/_protoruf*.so   # ~3 MB => release, ~32 MB => debug
+> file   python/protoruf/_protoruf*.so   # debug shows "with debug_info"
+> ```
+
 Two benchmarks, deliberately **kept separate** to stay transparent about what is
 measured. Both share the same message, the same descriptor, and the same number
 of iterations (`ITERATIONS`): **only protoruf's descriptor strategy changes**.
