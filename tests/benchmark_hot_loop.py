@@ -1,14 +1,20 @@
 #!/usr/bin/env python3
 """
-Benchmark protoruf vs google.protobuf for JSON <-> Protobuf conversion.
+Benchmark protoruf (hot loop) vs google.protobuf for JSON <-> Protobuf conversion.
 
-Measures timings for:
-  - Serialization   : JSON -> Protobuf
-  - Parsing/deserialization : Protobuf -> JSON
+⚡ "Hot loop" / high-frequency scenario.
 
-protoruf uses the free functions `json_to_protobuf` / `protobuf_to_json`, which
-re-decode the descriptor on every call. For the cached "hot loop" scenario using
-`DescriptorCache`, see `benchmark_hot_loop.py`.
+Difference from `benchmark.py`:
+  - `benchmark.py` uses the free functions `json_to_protobuf` /
+    `protobuf_to_json`, which **re-decode the descriptor on every call**.
+  - This file uses `DescriptorCache`, which **decodes the pool only once**
+    (outside the timed loop) and then reuses it -- the recommended usage for a
+    service processing many messages.
+
+For a fair and transparent comparison, on the google.protobuf side the factory
+and pool are also built **once** outside the measured loop (google already caches
+its pool). Both files share the same message, descriptor, and iteration count:
+only protoruf's descriptor strategy changes.
 
 Uses the descriptor compiled by protoruf for both libraries, to avoid any
 external compilation with protoc.
@@ -19,7 +25,7 @@ import json
 from pathlib import Path
 
 # --- protoruf -------------------------------------------------
-from protoruf import compile_proto, load_descriptor, json_to_protobuf, protobuf_to_json
+from protoruf import DescriptorCache, compile_proto, load_descriptor
 
 # --- google.protobuf (optional, benchmark only) ---------------
 try:
@@ -87,10 +93,12 @@ def create_google_message_factory(descriptor_bytes: bytes):
 
 
 def main():
-    print("Preparing the benchmark...\n")
+    print("Preparing the benchmark (hot loop / DescriptorCache)...\n")
 
-    # 1. Load the descriptor (protoruf)
+    # 1. Load the descriptor (protoruf) and build the cache ONCE, outside the
+    #    timed loop (equivalent to google's cached factory/pool).
     descriptor_bytes = get_descriptor()
+    cache = DescriptorCache(descriptor_bytes)
 
     # 2. Test data
     original_obj = {
@@ -107,7 +115,7 @@ def main():
     json_str = json.dumps(original_obj)
 
     # Prepare the protobuf bytes for the read benchmark
-    proto_bytes = json_to_protobuf(json_str, descriptor_bytes, MESSAGE_TYPE)
+    proto_bytes = cache.json_to_protobuf(json_str, MESSAGE_TYPE)
 
     # 3. google.protobuf setup (if available)
     google_ok = HAS_GOOGLE_PROTOBUF
@@ -138,11 +146,11 @@ def main():
     results = {}
 
     # ----- Write (JSON -> Protobuf) -----
-    # protoruf
+    # protoruf (DescriptorCache)
     print(f"protoruf write benchmark ({ITERATIONS:,} iterations)...")
     start = time.perf_counter()
     for _ in range(ITERATIONS):
-        _ = json_to_protobuf(json_str, descriptor_bytes, MESSAGE_TYPE)
+        _ = cache.json_to_protobuf(json_str, MESSAGE_TYPE)
     t_protoruf_write = time.perf_counter() - start
     results["protoruf_write"] = t_protoruf_write
     print(f"  → {t_protoruf_write:.4f}s ({ITERATIONS / t_protoruf_write:,.0f} msg/s)\n")
@@ -151,24 +159,19 @@ def main():
     if google_ok:
         print(f"google.protobuf write benchmark ({ITERATIONS:,} iterations)...")
         start = time.perf_counter()
-        if callable(MessageFactory):
-            for _ in range(ITERATIONS):
-                msg = json_format.Parse(json_str, MessageFactory())
-                _ = msg.SerializeToString()
-        else:
-            for _ in range(ITERATIONS):
-                msg = json_format.Parse(json_str, MessageFactory())
-                _ = msg.SerializeToString()
+        for _ in range(ITERATIONS):
+            msg = json_format.Parse(json_str, MessageFactory())
+            _ = msg.SerializeToString()
         t_google_write = time.perf_counter() - start
         results["google_write"] = t_google_write
         print(f"  → {t_google_write:.4f}s ({ITERATIONS / t_google_write:,.0f} msg/s)\n")
 
     # ----- Read (Protobuf -> JSON) -----
-    # protoruf
+    # protoruf (DescriptorCache)
     print(f"protoruf read benchmark ({ITERATIONS:,} iterations)...")
     start = time.perf_counter()
     for _ in range(ITERATIONS):
-        _ = protobuf_to_json(proto_bytes, descriptor_bytes, message_type=MESSAGE_TYPE)
+        _ = cache.protobuf_to_json(proto_bytes, MESSAGE_TYPE)
     t_protoruf_read = time.perf_counter() - start
     results["protoruf_read"] = t_protoruf_read
     print(f"  → {t_protoruf_read:.4f}s ({ITERATIONS / t_protoruf_read:,.0f} msg/s)\n")
@@ -177,25 +180,19 @@ def main():
     if google_ok:
         print(f"google.protobuf read benchmark ({ITERATIONS:,} iterations)...")
         start = time.perf_counter()
-        if callable(MessageFactory):
-            for _ in range(ITERATIONS):
-                msg = MessageFactory()
-                msg.ParseFromString(google_proto_bytes)
-                _ = json_format.MessageToJson(msg)
-        else:
-            for _ in range(ITERATIONS):
-                msg = MessageFactory()
-                msg.ParseFromString(google_proto_bytes)
-                _ = json_format.MessageToJson(msg)
+        for _ in range(ITERATIONS):
+            msg = MessageFactory()
+            msg.ParseFromString(google_proto_bytes)
+            _ = json_format.MessageToJson(msg)
         t_google_read = time.perf_counter() - start
         results["google_read"] = t_google_read
         print(f"  → {t_google_read:.4f}s ({ITERATIONS / t_google_read:,.0f} msg/s)\n")
 
     # 5. Print the comparison table
     print("=" * 80)
-    print(f"Results for {ITERATIONS:,} messages")
+    print(f"Hot loop results (DescriptorCache) for {ITERATIONS:,} messages")
     print("=" * 80)
-    header = f"{'Operation':<30} {'google.protobuf':<20} {'protoruf (Rust)':<20} {'Gain':<10}"
+    header = f"{'Operation':<30} {'google.protobuf':<20} {'protoruf (cache)':<20} {'Gain':<10}"
     print(header)
     print("-" * len(header))
 
@@ -228,7 +225,7 @@ def main():
     print(f"\n📊 Projection for 1,000,000 messages:\n")
     factor = 1_000_000 / ITERATIONS
 
-    print(f"{'Operation':<30} {'google.protobuf':<15} {'protoruf (Rust)':<15}")
+    print(f"{'Operation':<30} {'google.protobuf':<15} {'protoruf (cache)':<15}")
     print("-" * 60)
 
     if google_ok:
