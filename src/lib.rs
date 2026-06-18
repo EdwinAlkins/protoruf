@@ -5,11 +5,11 @@
 
 mod core;
 
+use parking_lot::RwLock;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use prost_reflect::{DescriptorPool, MessageDescriptor};
 use std::collections::HashMap;
-use std::sync::Mutex;
 
 /// Compile a .proto file to a descriptor set (bytes)
 #[pyfunction]
@@ -55,13 +55,22 @@ fn protobuf_to_json(
 struct DescriptorCache {
     pool: DescriptorPool,
     // Memoizes resolved message descriptors by their fully-qualified name.
-    descriptors: Mutex<HashMap<String, MessageDescriptor>>,
+    // An RwLock lets concurrent conversions read the cache in parallel; the write
+    // lock is only taken the first time each message type is resolved.
+    descriptors: RwLock<HashMap<String, MessageDescriptor>>,
 }
 
 impl DescriptorCache {
     /// Resolve a message descriptor, caching the lookup.
     fn resolve(&self, message_type: &str) -> PyResult<MessageDescriptor> {
-        let mut cache = self.descriptors.lock().unwrap();
+        // Fast path: a shared read lock, taken by every concurrent conversion.
+        if let Some(desc) = self.descriptors.read().get(message_type) {
+            return Ok(desc.clone());
+        }
+
+        // Slow path: upgrade to a write lock to insert the freshly resolved entry.
+        let mut cache = self.descriptors.write();
+        // Double-check: another thread may have inserted it between the two locks.
         if let Some(desc) = cache.get(message_type) {
             return Ok(desc.clone());
         }
@@ -80,7 +89,7 @@ impl DescriptorCache {
             .map_err(PyErr::new::<pyo3::exceptions::PyValueError, _>)?;
         Ok(Self {
             pool,
-            descriptors: Mutex::new(HashMap::new()),
+            descriptors: RwLock::new(HashMap::new()),
         })
     }
 

@@ -102,7 +102,10 @@ pub fn protobuf_to_json_string_with_descriptor(
 
     // Serialize directly with prost-reflect (no intermediate serde_json::Value tree).
     let options = serialize_options();
-    let buf = Vec::new();
+    // Pre-allocate: JSON is typically a few times larger than the protobuf wire
+    // format, so this avoids repeated reallocations as the buffer grows.
+    let estimated_capacity = protobuf_bytes.len().saturating_mul(3).max(128);
+    let buf = Vec::with_capacity(estimated_capacity);
     let bytes = if pretty {
         let mut serializer = serde_json::Serializer::pretty(buf);
         dynamic_message
