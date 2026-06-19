@@ -186,7 +186,7 @@ rust-json-probuff/
 │   ├── test_models.py          # Pydantic models for tests
 │   └── test_rust_json_probuff.py
 ├── examples/                   # Usage examples with their own .proto files
-└── doc/                        # Documentation
+└── dev-docs/                   # Developer notes (binding analyses, migration)
 ```
 
 ## API Reference

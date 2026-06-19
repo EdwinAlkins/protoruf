@@ -86,6 +86,12 @@ Shows the recommended pattern for converting many messages:
 uv run python examples/05_descriptor_cache.py
 ```
 
+## JavaScript / TypeScript (Node & WASM)
+
+Examples for the Node native addon and the WebAssembly build live in
+[`js/`](js/README.md) — each does a JSON ↔ Protobuf round-trip against the same Rust
+core. See that README for the build & run commands.
+
 ## Quick Start
 
 ```python

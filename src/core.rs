@@ -4,6 +4,9 @@ use prost::Message;
 use prost_reflect::{
     DescriptorPool, DeserializeOptions, DynamicMessage, MessageDescriptor, SerializeOptions,
 };
+use protox::file::{ChainFileResolver, File, FileResolver, GoogleFileResolver};
+use protox::{Compiler, Error as ProtoxError};
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 /// Serialization options matching protoruf's historical JSON shape:
@@ -17,6 +20,11 @@ fn serialize_options() -> SerializeOptions {
 }
 
 /// Compile a .proto file to a descriptor set (bytes)
+///
+/// Reads the filesystem, so it is only wired up by the Python and Node bindings;
+/// the WASM target deliberately omits it (use [`compile_proto_from_sources`]).
+/// Allow it to be unused in wasm-only builds without a warning.
+#[cfg_attr(not(any(feature = "python", feature = "node", test)), allow(dead_code))]
 pub fn compile_proto(proto_path: &str, include_paths: Option<Vec<String>>) -> Result<Vec<u8>, String> {
     let proto_path = PathBuf::from(proto_path);
 
@@ -42,6 +50,52 @@ pub fn compile_proto(proto_path: &str, include_paths: Option<Vec<String>>) -> Re
         .map_err(|e| format!("Failed to encode descriptor set: {}", e))?;
 
     Ok(descriptor_bytes)
+}
+
+/// A [`FileResolver`] that serves `.proto` sources held in memory (name -> source).
+///
+/// This is what makes compilation work without any filesystem access (e.g. in a
+/// browser/WASM context): `import` statements between protos are resolved by name
+/// against this map.
+struct InMemoryResolver {
+    files: HashMap<String, String>,
+}
+
+impl FileResolver for InMemoryResolver {
+    fn open_file(&self, name: &str) -> Result<File, ProtoxError> {
+        match self.files.get(name) {
+            Some(source) => File::from_source(name, source),
+            None => Err(ProtoxError::file_not_found(name)),
+        }
+    }
+}
+
+/// Compile a set of `.proto` files provided in memory into a descriptor set (bytes).
+///
+/// `files` maps each file's logical name (e.g. `"user.proto"`, `"common/types.proto"`)
+/// to its source text. `root` is the entry file to compile (must be a key of `files`).
+///
+/// Unlike [`compile_proto`], this performs **no filesystem access**, so it works in
+/// sandboxed targets such as WASM/the browser. Google well-known types
+/// (`google/protobuf/*.proto`) are still resolved automatically. The resulting bytes
+/// are identical to what [`compile_proto`] would produce for the same sources.
+pub fn compile_proto_from_sources(
+    files: HashMap<String, String>,
+    root: &str,
+) -> Result<Vec<u8>, String> {
+    let mut resolver = ChainFileResolver::new();
+    resolver.add(InMemoryResolver { files }); // user-provided protos take priority
+    resolver.add(GoogleFileResolver::new()); // embedded well-known types
+
+    let mut compiler = Compiler::with_file_resolver(resolver);
+    // Include transitively-imported files (and well-known types) in the output, so
+    // the resulting descriptor set is self-contained and the pool can be decoded
+    // without "imported file ... has not been added" errors.
+    compiler.include_imports(true);
+    compiler
+        .open_file(root)
+        .map_err(|e| format!("Failed to compile proto file: {}", e))?;
+    Ok(compiler.encode_file_descriptor_set())
 }
 
 /// Decode a serialized `FileDescriptorSet` into a reusable [`DescriptorPool`].
@@ -410,5 +464,80 @@ mod tests {
         let desc = get_message_descriptor(&pool, "message.Message").unwrap();
 
         assert!(json_to_protobuf_bytes_with_descriptor("not valid json", &desc).is_err());
+    }
+
+    // --- Tests for in-memory compilation (backing the WASM target) ---
+
+    #[test]
+    fn test_compile_from_sources_single_file() {
+        let proto = r#"syntax = "proto3"; package user; message User { string id = 1; repeated string tags = 2; }"#;
+        let files = HashMap::from([("user.proto".to_string(), proto.to_string())]);
+
+        let descriptor = compile_proto_from_sources(files, "user.proto").unwrap();
+        assert!(!descriptor.is_empty());
+
+        // The descriptor must be usable for a normal round-trip.
+        let pb = json_to_protobuf_bytes(r#"{"id":"123","tags":["a","b"]}"#, &descriptor, "user.User").unwrap();
+        let json = protobuf_to_json_string(&pb, &descriptor, false, "user.User").unwrap();
+        let result: JsonValue = serde_json::from_str(&json).unwrap();
+        assert_eq!(result["id"], "123");
+        assert_eq!(result["tags"], serde_json::json!(["a", "b"]));
+    }
+
+    #[test]
+    fn test_compile_from_sources_with_import() {
+        // Two in-memory files, one importing the other (resolved by name, no FS).
+        let common = r#"syntax = "proto3"; package common; message Id { string value = 1; }"#;
+        let root = r#"syntax = "proto3"; package user; import "common.proto"; message User { common.Id id = 1; }"#;
+        let files = HashMap::from([
+            ("common.proto".to_string(), common.to_string()),
+            ("user.proto".to_string(), root.to_string()),
+        ]);
+
+        let descriptor = compile_proto_from_sources(files, "user.proto").unwrap();
+        let pb = json_to_protobuf_bytes(r#"{"id":{"value":"x"}}"#, &descriptor, "user.User").unwrap();
+        let json = protobuf_to_json_string(&pb, &descriptor, false, "user.User").unwrap();
+        let result: JsonValue = serde_json::from_str(&json).unwrap();
+        assert_eq!(result["id"]["value"], "x");
+    }
+
+    #[test]
+    fn test_compile_from_sources_with_google_wellknown() {
+        // google/protobuf/* imports must resolve from the embedded GoogleFileResolver.
+        let root = r#"syntax = "proto3"; package ev; import "google/protobuf/timestamp.proto"; message Event { google.protobuf.Timestamp at = 1; }"#;
+        let files = HashMap::from([("ev.proto".to_string(), root.to_string())]);
+
+        let descriptor = compile_proto_from_sources(files, "ev.proto").unwrap();
+        assert!(!descriptor.is_empty());
+        let pool = load_descriptor_pool(&descriptor).unwrap();
+        assert!(get_message_descriptor(&pool, "ev.Event").is_ok());
+    }
+
+    #[test]
+    fn test_compile_from_sources_matches_compile_proto() {
+        // In-memory compilation must produce a descriptor equivalent to the FS-based one.
+        let proto_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/proto/message.proto");
+        let source = std::fs::read_to_string(&proto_path).unwrap();
+        let files = HashMap::from([("message.proto".to_string(), source)]);
+
+        let from_sources = compile_proto_from_sources(files, "message.proto").unwrap();
+
+        // Both descriptors must resolve the same message and round-trip identically.
+        let json_input = r#"{"id":"1","content":"hi"}"#;
+        let a = json_to_protobuf_bytes(json_input, &from_sources, "message.Message").unwrap();
+        let b = json_to_protobuf_bytes(json_input, &get_test_descriptor(), "message.Message").unwrap();
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn test_compile_from_sources_missing_root() {
+        let files = HashMap::new();
+        assert!(compile_proto_from_sources(files, "nope.proto").is_err());
+    }
+
+    #[test]
+    fn test_compile_from_sources_invalid_syntax() {
+        let files = HashMap::from([("bad.proto".to_string(), "this is not valid proto".to_string())]);
+        assert!(compile_proto_from_sources(files, "bad.proto").is_err());
     }
 }
