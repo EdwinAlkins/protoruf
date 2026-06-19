@@ -13,8 +13,8 @@ prost = "0.13"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 prost-reflect = { version = "0.14", features = ["serde"] }
-prost-build = "0.13"
 protox = "0.7"
+lru = "0.12"
 
 # --- Binding-specific dependencies (each gated behind its own feature) ---
 # pyo3 is now OPTIONAL: it is only compiled when the `python` feature is on
@@ -45,6 +45,16 @@ wasm = ["dep:wasm-bindgen", "dep:serde-wasm-bindgen"]
 # the `node` feature (see build.rs), so Python/WASM/default builds are unaffected.
 [build-dependencies]
 napi-build = "2"
+
+[dev-dependencies]
+criterion = "0.7"
+
+[[bench]]
+name = "conversion"
+harness = false
+
+[profile.release]
+strip = "symbols"
 
 # Heavy optimization (full LTO + a single codegen unit) is very expensive at
 # compile time and would slow down every local rebuild (uv sync / maturin

@@ -6,9 +6,9 @@
 //! works exactly like in Python.
 
 use crate::core;
+use crate::descriptor_resolver::DescriptorResolver;
 use napi::bindgen_prelude::{Buffer, Error, Result};
 use napi_derive::napi;
-use prost_reflect::DescriptorPool;
 use std::collections::HashMap;
 
 /// Compile a `.proto` file from disk to a descriptor set.
@@ -29,8 +29,9 @@ pub fn compile_proto(
 pub fn compile_proto_from_sources(
     files: HashMap<String, String>,
     root: String,
+    include_imports: Option<bool>,
 ) -> Result<Buffer> {
-    core::compile_proto_from_sources(files, &root)
+    core::compile_proto_from_sources(files, &root, include_imports.unwrap_or(true))
         .map(Buffer::from)
         .map_err(|e| Error::from_reason(e))
 }
@@ -70,16 +71,16 @@ pub fn protobuf_to_json(
 /// this once and reuse it across calls.
 #[napi]
 pub struct DescriptorCache {
-    pool: DescriptorPool,
+    resolver: DescriptorResolver,
 }
 
 #[napi]
 impl DescriptorCache {
     #[napi(constructor)]
     pub fn new(descriptor_bytes: Buffer) -> Result<Self> {
-        let pool = core::load_descriptor_pool(&descriptor_bytes)
+        let resolver = DescriptorResolver::from_descriptor_bytes(&descriptor_bytes)
             .map_err(|e| Error::from_reason(e))?;
-        Ok(Self { pool })
+        Ok(Self { resolver })
     }
 
     #[napi]
@@ -88,9 +89,11 @@ impl DescriptorCache {
         json_str: String,
         message_type: String,
     ) -> Result<Buffer> {
-        let desc = core::get_message_descriptor(&self.pool, &message_type)
+        let desc = self
+            .resolver
+            .resolve(&message_type)
             .map_err(|e| Error::from_reason(e))?;
-        core::json_to_protobuf_bytes_with_descriptor(&json_str, &desc)
+        core::json_to_protobuf_bytes_with_descriptor_owned(&json_str, desc)
             .map(Buffer::from)
             .map_err(|e| Error::from_reason(e))
     }
@@ -102,11 +105,13 @@ impl DescriptorCache {
         message_type: String,
         pretty: Option<bool>,
     ) -> Result<String> {
-        let desc = core::get_message_descriptor(&self.pool, &message_type)
+        let desc = self
+            .resolver
+            .resolve(&message_type)
             .map_err(|e| Error::from_reason(e))?;
-        core::protobuf_to_json_string_with_descriptor(
+        core::protobuf_to_json_string_with_descriptor_owned(
             &protobuf_bytes,
-            &desc,
+            desc,
             pretty.unwrap_or(false),
         )
         .map_err(|e| Error::from_reason(e))

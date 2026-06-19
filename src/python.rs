@@ -4,8 +4,7 @@
 //! errors between Rust and Python.
 
 use crate::core;
-use parking_lot::RwLock;
-use prost_reflect::{DescriptorPool, MessageDescriptor};
+use crate::descriptor_resolver::DescriptorResolver;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use std::collections::HashMap;
@@ -21,11 +20,13 @@ fn compile_proto(proto_path: &str, include_paths: Option<Vec<String>>) -> PyResu
 
 /// Compile a set of .proto files provided in memory (no filesystem access)
 #[pyfunction]
+#[pyo3(signature = (files, root, include_imports = true))]
 fn compile_proto_from_sources(
     files: HashMap<String, String>,
     root: &str,
+    include_imports: bool,
 ) -> PyResult<Vec<u8>> {
-    core::compile_proto_from_sources(files, root).map_err(|e| {
+    core::compile_proto_from_sources(files, root, include_imports).map_err(|e| {
         PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e)
     })
 }
@@ -38,7 +39,8 @@ fn json_to_protobuf<'py>(
     descriptor_bytes: &[u8],
     message_type: &str,
 ) -> PyResult<Bound<'py, PyBytes>> {
-    let protobuf_bytes = core::json_to_protobuf_bytes(json_str, descriptor_bytes, message_type)
+    let protobuf_bytes = py
+        .detach(|| core::json_to_protobuf_bytes(json_str, descriptor_bytes, message_type))
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e))?;
 
     Ok(PyBytes::new(py, &protobuf_bytes))
@@ -46,14 +48,17 @@ fn json_to_protobuf<'py>(
 
 /// Convert a Protobuf message (bytes) to a JSON string
 #[pyfunction]
-fn protobuf_to_json(
+fn protobuf_to_json<'py>(
+    py: Python<'py>,
     protobuf_bytes: &[u8],
     descriptor_bytes: &[u8],
     pretty: bool,
     message_type: &str,
 ) -> PyResult<String> {
-    core::protobuf_to_json_string(protobuf_bytes, descriptor_bytes, pretty, message_type)
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))
+    py.detach(|| {
+        core::protobuf_to_json_string(protobuf_bytes, descriptor_bytes, pretty, message_type)
+    })
+    .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))
 }
 
 /// A reusable, pre-decoded descriptor pool.
@@ -63,44 +68,16 @@ fn protobuf_to_json(
 /// re-decoding the pool (and re-resolving message descriptors) on every message.
 #[pyclass]
 struct DescriptorCache {
-    pool: DescriptorPool,
-    // Memoizes resolved message descriptors by their fully-qualified name.
-    // An RwLock lets concurrent conversions read the cache in parallel; the write
-    // lock is only taken the first time each message type is resolved.
-    descriptors: RwLock<HashMap<String, MessageDescriptor>>,
-}
-
-impl DescriptorCache {
-    /// Resolve a message descriptor, caching the lookup.
-    fn resolve(&self, message_type: &str) -> PyResult<MessageDescriptor> {
-        // Fast path: a shared read lock, taken by every concurrent conversion.
-        if let Some(desc) = self.descriptors.read().get(message_type) {
-            return Ok(desc.clone());
-        }
-
-        // Slow path: upgrade to a write lock to insert the freshly resolved entry.
-        let mut cache = self.descriptors.write();
-        // Double-check: another thread may have inserted it between the two locks.
-        if let Some(desc) = cache.get(message_type) {
-            return Ok(desc.clone());
-        }
-        let desc = core::get_message_descriptor(&self.pool, message_type)
-            .map_err(PyErr::new::<pyo3::exceptions::PyValueError, _>)?;
-        cache.insert(message_type.to_string(), desc.clone());
-        Ok(desc)
-    }
+    resolver: DescriptorResolver,
 }
 
 #[pymethods]
 impl DescriptorCache {
     #[new]
     fn new(descriptor_bytes: &[u8]) -> PyResult<Self> {
-        let pool = core::load_descriptor_pool(descriptor_bytes)
+        let resolver = DescriptorResolver::from_descriptor_bytes(descriptor_bytes)
             .map_err(PyErr::new::<pyo3::exceptions::PyValueError, _>)?;
-        Ok(Self {
-            pool,
-            descriptors: RwLock::new(HashMap::new()),
-        })
+        Ok(Self { resolver })
     }
 
     /// Convert a JSON string to a Protobuf message (bytes).
@@ -110,9 +87,13 @@ impl DescriptorCache {
         json_str: &str,
         message_type: &str,
     ) -> PyResult<Bound<'py, PyBytes>> {
-        let desc = self.resolve(message_type)?;
-        let protobuf_bytes = core::json_to_protobuf_bytes_with_descriptor(json_str, &desc)
-            .map_err(PyErr::new::<pyo3::exceptions::PyValueError, _>)?;
+        let protobuf_bytes = py
+            .detach(|| {
+                let desc = self.resolver.resolve(message_type)?;
+                core::json_to_protobuf_bytes_with_descriptor_owned(json_str, desc)
+            })
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e))?;
+
         Ok(PyBytes::new(py, &protobuf_bytes))
     }
 
@@ -120,13 +101,16 @@ impl DescriptorCache {
     #[pyo3(signature = (protobuf_bytes, message_type, pretty = false))]
     fn protobuf_to_json(
         &self,
+        py: Python<'_>,
         protobuf_bytes: &[u8],
         message_type: &str,
         pretty: bool,
     ) -> PyResult<String> {
-        let desc = self.resolve(message_type)?;
-        core::protobuf_to_json_string_with_descriptor(protobuf_bytes, &desc, pretty)
-            .map_err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>)
+        py.detach(|| {
+            let desc = self.resolver.resolve(message_type)?;
+            core::protobuf_to_json_string_with_descriptor_owned(protobuf_bytes, desc, pretty)
+        })
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))
     }
 }
 

@@ -20,7 +20,10 @@
     allow(dead_code)
 )]
 
-mod core;
+mod pool_cache;
+
+pub mod core;
+pub mod descriptor_resolver;
 
 #[cfg(feature = "python")]
 mod python;

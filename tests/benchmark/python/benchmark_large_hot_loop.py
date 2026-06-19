@@ -63,6 +63,21 @@ def build_large_dataset(target_bytes: int) -> dict:
     serialized JSON reaches the target size. Each record exercises scalars, an
     enum, a repeated field, a map and a nested vector of doubles.
     """
+    def make_record(index: int) -> dict:
+        return {
+            "id": f"rec-{index:08d}",
+            "name": f"Record number {index}",
+            # STATUS_ACTIVE / STATUS_ARCHIVED — non-zero on purpose: proto3
+            # omits default (0) values, which would drop the field on output.
+            "status": (index % 2) + 1,
+            "timestamp": 1_700_000_000 + index,
+            "tags": [f"tag-{index % 50}", f"group-{index % 10}"],
+            "attributes": {"region": "eu-west", "tier": str(index % 5), "note": "x" * 16},
+            "embedding": {
+                "values": [round((index % 7) * 0.125 + k, 4) for k in range(8)],
+            },
+        }
+
     records: list[dict] = []
     obj = {
         "dataset_id": "ds-benchmark-1",
@@ -70,23 +85,27 @@ def build_large_dataset(target_bytes: int) -> dict:
         "records": records,
         "metadata": {"source": "benchmark", "version": "1.0", "env": "bench"},
     }
-    i = 0
+
+    batch_size = 200
+    index = 0
+    for _ in range(batch_size):
+        records.append(make_record(index))
+        index += 1
+
+    current_size = len(json.dumps(obj))
+    if current_size < target_bytes:
+        batch_json = json.dumps(records[-batch_size:])
+        bytes_per_record = len(batch_json) / batch_size
+        extra_records = int((target_bytes - current_size) / bytes_per_record)
+        for _ in range(extra_records):
+            records.append(make_record(index))
+            index += 1
+
     while len(json.dumps(obj)) < target_bytes:
-        for _ in range(200):
-            records.append(
-                {
-                    "id": f"rec-{i:08d}",
-                    "name": f"Record number {i}",
-                    # STATUS_ACTIVE / STATUS_ARCHIVED — non-zero on purpose: proto3
-                    # omits default (0) values, which would drop the field on output.
-                    "status": (i % 2) + 1,
-                    "timestamp": 1_700_000_000 + i,
-                    "tags": [f"tag-{i % 50}", f"group-{i % 10}"],
-                    "attributes": {"region": "eu-west", "tier": str(i % 5), "note": "x" * 16},
-                    "embedding": {"values": [round((i % 7) * 0.125 + k, 4) for k in range(8)]},
-                }
-            )
-            i += 1
+        for _ in range(min(batch_size, 50)):
+            records.append(make_record(index))
+            index += 1
+
     return obj
 
 

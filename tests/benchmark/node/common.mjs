@@ -52,6 +52,19 @@ export const LARGE_TYPE = "bench.Dataset";
 
 /** Build a ~`targetBytes` bench.Dataset (mirror of the Python generator). */
 export function buildLargeDataset(targetBytes) {
+  const makeRecord = (index) => ({
+    id: `rec-${String(index).padStart(8, "0")}`,
+    name: `Record number ${index}`,
+    // STATUS_ACTIVE / STATUS_ARCHIVED — non-zero on purpose (proto3 omits 0).
+    status: (index % 2) + 1,
+    timestamp: 1_700_000_000 + index,
+    tags: [`tag-${index % 50}`, `group-${index % 10}`],
+    attributes: { region: "eu-west", tier: String(index % 5), note: "x".repeat(16) },
+    embedding: {
+      values: Array.from({ length: 8 }, (_, k) => Math.round(((index % 7) * 0.125 + k) * 1e4) / 1e4),
+    },
+  });
+
   const records = [];
   const obj = {
     dataset_id: "ds-benchmark-1",
@@ -59,22 +72,29 @@ export function buildLargeDataset(targetBytes) {
     records,
     metadata: { source: "benchmark", version: "1.0", env: "bench" },
   };
-  let i = 0;
+
+  const batchSize = 200;
+  let index = 0;
+  for (let n = 0; n < batchSize; n++) {
+    records.push(makeRecord(index));
+    index++;
+  }
+
+  let currentSize = JSON.stringify(obj).length;
+  if (currentSize < targetBytes) {
+    const batchJson = JSON.stringify(records.slice(-batchSize));
+    const bytesPerRecord = batchJson.length / batchSize;
+    const extraRecords = Math.floor((targetBytes - currentSize) / bytesPerRecord);
+    for (let n = 0; n < extraRecords; n++) {
+      records.push(makeRecord(index));
+      index++;
+    }
+  }
+
   while (JSON.stringify(obj).length < targetBytes) {
-    for (let n = 0; n < 200; n++) {
-      records.push({
-        id: `rec-${String(i).padStart(8, "0")}`,
-        name: `Record number ${i}`,
-        // STATUS_ACTIVE / STATUS_ARCHIVED — non-zero on purpose (proto3 omits 0).
-        status: (i % 2) + 1,
-        timestamp: 1_700_000_000 + i,
-        tags: [`tag-${i % 50}`, `group-${i % 10}`],
-        attributes: { region: "eu-west", tier: String(i % 5), note: "x".repeat(16) },
-        embedding: {
-          values: Array.from({ length: 8 }, (_, k) => Math.round(((i % 7) * 0.125 + k) * 1e4) / 1e4),
-        },
-      });
-      i++;
+    for (let n = 0; n < Math.min(batchSize, 50); n++) {
+      records.push(makeRecord(index));
+      index++;
     }
   }
   return obj;

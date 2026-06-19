@@ -6,7 +6,7 @@
 //! descriptor's bytes. Binary payloads cross as `Uint8Array` (Rust `Vec<u8>`/`&[u8]`).
 
 use crate::core;
-use prost_reflect::DescriptorPool;
+use crate::descriptor_resolver::DescriptorResolver;
 use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
 
@@ -16,10 +16,15 @@ use wasm_bindgen::prelude::*;
 /// (e.g. `{ "user.proto": "syntax=\"proto3\"; ..." }`); `root` is the entry file.
 /// Google well-known types are resolved automatically.
 #[wasm_bindgen(js_name = compileProtoFromSources)]
-pub fn compile_proto_from_sources(files: JsValue, root: &str) -> Result<Vec<u8>, JsError> {
+pub fn compile_proto_from_sources(
+    files: JsValue,
+    root: &str,
+    include_imports: Option<bool>,
+) -> Result<Vec<u8>, JsError> {
     let files: HashMap<String, String> =
         serde_wasm_bindgen::from_value(files).map_err(|e| JsError::new(&e.to_string()))?;
-    core::compile_proto_from_sources(files, root).map_err(|e| JsError::new(&e))
+    core::compile_proto_from_sources(files, root, include_imports.unwrap_or(true))
+        .map_err(|e| JsError::new(&e))
 }
 
 /// Convert a JSON string to a Protobuf message.
@@ -48,15 +53,16 @@ pub fn protobuf_to_json(
 /// A reusable, pre-decoded descriptor pool (equivalent of the Python class).
 #[wasm_bindgen]
 pub struct DescriptorCache {
-    pool: DescriptorPool,
+    resolver: DescriptorResolver,
 }
 
 #[wasm_bindgen]
 impl DescriptorCache {
     #[wasm_bindgen(constructor)]
     pub fn new(descriptor_bytes: &[u8]) -> Result<DescriptorCache, JsError> {
-        let pool = core::load_descriptor_pool(descriptor_bytes).map_err(|e| JsError::new(&e))?;
-        Ok(Self { pool })
+        let resolver = DescriptorResolver::from_descriptor_bytes(descriptor_bytes)
+            .map_err(|e| JsError::new(&e))?;
+        Ok(Self { resolver })
     }
 
     #[wasm_bindgen(js_name = jsonToProtobuf)]
@@ -65,9 +71,11 @@ impl DescriptorCache {
         json_str: &str,
         message_type: &str,
     ) -> Result<Vec<u8>, JsError> {
-        let desc = core::get_message_descriptor(&self.pool, message_type)
+        let desc = self
+            .resolver
+            .resolve(message_type)
             .map_err(|e| JsError::new(&e))?;
-        core::json_to_protobuf_bytes_with_descriptor(json_str, &desc)
+        core::json_to_protobuf_bytes_with_descriptor_owned(json_str, desc)
             .map_err(|e| JsError::new(&e))
     }
 
@@ -78,9 +86,15 @@ impl DescriptorCache {
         message_type: &str,
         pretty: Option<bool>,
     ) -> Result<String, JsError> {
-        let desc = core::get_message_descriptor(&self.pool, message_type)
+        let desc = self
+            .resolver
+            .resolve(message_type)
             .map_err(|e| JsError::new(&e))?;
-        core::protobuf_to_json_string_with_descriptor(protobuf_bytes, &desc, pretty.unwrap_or(false))
-            .map_err(|e| JsError::new(&e))
+        core::protobuf_to_json_string_with_descriptor_owned(
+            protobuf_bytes,
+            desc,
+            pretty.unwrap_or(false),
+        )
+        .map_err(|e| JsError::new(&e))
     }
 }
