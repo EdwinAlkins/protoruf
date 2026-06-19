@@ -1,5 +1,5 @@
 site_name: protoruf
-site_description: High-performance Python library for JSON ↔ Protobuf conversion, written in Rust
+site_description: High-performance JSON ↔ Protobuf conversion, powered by Rust — for Python, Node.js, the browser (WASM) and Rust
 site_author: protoruf contributors
 site_url: https://EdwinAlkins.github.io/protoruf/
 
@@ -37,8 +37,8 @@ theme:
     - navigation.instant
     - navigation.instant.progress
     - navigation.tracking
+    - navigation.tabs
     - navigation.sections
-    - navigation.expand
     - navigation.indexes
     - navigation.top
     - search.highlight
@@ -106,16 +106,36 @@ plugins:
             members_order: source
             group_by_category: true
 
-# Navigation
+# Navigation (per-language tabs)
 nav:
   - Home: index.md
-  - Getting Started:
+  - Python:
       - Installation: getting-started/installation.md
       - Quick Start: getting-started/quick-start.md
-  - User Guide:
       - Basic Usage: guide/basic-usage.md
       - Proto Files & Compilation: guide/proto-files.md
       - Advanced Features: guide/advanced.md
-  - API Reference: api/reference.md
+      - API Reference: api/reference.md
+  - Node.js:
+      - Installation: node/installation.md
+      - Quick Start: node/quick-start.md
+      - Basic Usage: node/basic-usage.md
+      - Proto Files & Compilation: node/proto-files.md
+      - Advanced Features: node/advanced.md
+      - API Reference: node/api.md
+  - Browser (WASM):
+      - Installation: browser/installation.md
+      - Quick Start: browser/quick-start.md
+      - Basic Usage: browser/basic-usage.md
+      - Proto Files & Compilation: browser/proto-files.md
+      - Advanced Features: browser/advanced.md
+      - API Reference: browser/api.md
+  - Rust:
+      - Overview: rust/overview.md
+      - Quick Start: rust/quick-start.md
+      - Basic Usage: rust/basic-usage.md
+      - Proto Compilation: rust/proto-files.md
+      - Performance & Patterns: rust/advanced.md
+      - API Reference: rust/api.md
   - Development:
       - Contributing: development/contributing.md

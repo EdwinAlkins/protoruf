@@ -1,21 +1,18 @@
 # protoruf
 
 <p align="center">
-  <strong>High-performance JSON ↔ Protobuf conversion for Python, powered by Rust</strong>
+  <strong>High-performance JSON ↔ Protobuf conversion, powered by Rust —<br>for Python, Node.js, the browser (WASM) and Rust.</strong>
 </p>
 
 <p align="center">
-  <a href="https://github.com/EdwinAlkins/protoruf/actions">
-    <img src="https://img.shields.io/github/actions/workflow/status/EdwinAlkins/protoruf/ci.yml?branch=main&label=CI&logo=github" alt="CI Status">
-  </a>
   <a href="https://pypi.org/project/protoruf/">
     <img src="https://img.shields.io/pypi/v/protoruf?color=blue&logo=pypi" alt="PyPI Version">
   </a>
+  <a href="https://www.npmjs.com/package/@protoruf/node">
+    <img src="https://img.shields.io/npm/v/@protoruf/node?color=red&logo=npm&label=%40protoruf%2Fnode" alt="npm node">
+  </a>
   <a href="https://github.com/EdwinAlkins/protoruf/blob/main/LICENSE">
     <img src="https://img.shields.io/github/license/EdwinAlkins/protoruf?color=blue" alt="License">
-  </a>
-  <a href="https://github.com/EdwinAlkins/protoruf">
-    <img src="https://img.shields.io/badge/python-3.12+-blue?logo=python" alt="Python Version">
   </a>
 </p>
 
@@ -23,102 +20,93 @@
 
 ## Overview
 
-**protoruf** is a Python library written in Rust that provides blazing-fast conversion between JSON and Protobuf messages. Built on top of [prost-reflect](https://github.com/devicehive/prost-reflect) and [protox](https://github.com/andrewhick/protox), it offers type-safe serialization with explicit message type specification.
+**protoruf** converts between JSON and Protobuf **dynamically** — no `protoc`, no generated
+classes. You compile a `.proto` to a descriptor once, then convert in both directions at Rust
+speed. It is built on [prost-reflect](https://github.com/andrewhickman/prost-reflect) and
+[protox](https://github.com/andrewhickman/protox).
+
+A single **pure-Rust core** powers every target through a thin binding layer, so the
+conversion logic is shared, never duplicated:
+
+| Target | Package | Install |
+|---|---|---|
+| **Python** | [`protoruf`](https://pypi.org/project/protoruf/) | `pip install protoruf` |
+| **Node.js** | [`@protoruf/node`](https://www.npmjs.com/package/@protoruf/node) | `npm i @protoruf/node` |
+| **Browser (WASM)** | [`@protoruf/wasm`](https://www.npmjs.com/package/@protoruf/wasm) | `npm i @protoruf/wasm` |
+| **Rust** | core crate | — |
 
 ### Why protoruf?
 
-- ⚡ **Blazing Fast** — Core logic implemented in Rust for maximum performance
-- 🔒 **Type-Safe** — Explicit message types prevent serialization errors
-- 📦 **Zero External Dependencies** — Built-in proto compilation with Rust protox
-- 🎯 **Complete Protobuf Support** — Nested messages, enums, repeated fields, maps, oneof
-- 🐍 **Pythonic API** — Clean, intuitive interface with full type hints
+- ⚡ **Blazing fast** — core logic implemented in Rust
+- 🔁 **One core, four targets** — identical semantics across Python / Node / Browser / Rust
+- 🔒 **Type-safe** — explicit message types prevent serialization errors
+- 📦 **No `protoc`** — built-in `.proto` compilation with protox, no external tools or codegen
+- 🎯 **Complete Protobuf support** — nested messages, enums, repeated fields, maps, oneof
 
-### Quick Example
-
-```python
-from protoruf import compile_proto, json_to_protobuf, protobuf_to_json
-
-# Compile your .proto file
-descriptor = compile_proto("message.proto")
-
-# Convert JSON to Protobuf
-json_data = '{"id": "123", "content": "Hello", "priority": 1}'
-protobuf_bytes = json_to_protobuf(json_data, descriptor, message_type="message.Message")
-
-# Convert Protobuf back to JSON
-result = protobuf_to_json(protobuf_bytes, descriptor, message_type="message.Message", pretty=True)
-print(result)
-```
-
-## Getting Started
+## Choose your target
 
 <div class="grid cards" markdown>
 
--   :material-download:{ .lg .middle } **Installation**
-    
-    ---
-    
-    Install protoruf via pip and verify your setup
-    
-    [Get Started →](getting-started/installation.md)
+-   :material-language-python:{ .lg .middle } **Python**
 
--   :material-rocket-launch:{ .lg .middle } **Quick Start**
-    
     ---
-    
-    Build your first proto message in 5 minutes
-    
-    [Quick Start →](getting-started/quick-start.md)
 
--   :material-book-open:{ .lg .middle } **User Guide**
-    
-    ---
-    
-    Learn basic usage, proto files, and advanced features
-    
-    [Read Guide →](guide/basic-usage.md)
+    `pip install protoruf` — with direct Pydantic integration.
 
--   :material-code-braces:{ .lg .middle } **API Reference**
-    
+    [Get started →](getting-started/installation.md)
+
+-   :material-nodejs:{ .lg .middle } **Node.js**
+
     ---
-    
-    Complete API documentation with examples
-    
-    [View API →](api/reference.md)
+
+    `npm i @protoruf/node` — native addon, full filesystem access.
+
+    [Get started →](node/installation.md)
+
+-   :material-web:{ .lg .middle } **Browser (WASM)**
+
+    ---
+
+    `npm i @protoruf/wasm` — runs entirely in the browser, sandboxed.
+
+    [Get started →](browser/installation.md)
+
+-   :material-language-rust:{ .lg .middle } **Rust**
+
+    ---
+
+    The shared engine behind every binding.
+
+    [Learn more →](rust/overview.md)
 
 </div>
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     Python Application                      │
-│              compile_proto()  │  json_to_protobuf()         │
-│              protobuf_to_json()  │  load_descriptor()       │
-│      pydantic_to_protobuf()  │  protobuf_to_pydantic()      │
-├─────────────────────────────────────────────────────────────┤
-│                   PyO3 Rust Bindings                        │
-├─────────────────────────────────────────────────────────────┤
-│         protox  │  prost-reflect  │  serde_json             │
-└─────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────┐
+│   Python        Node.js        Browser (WASM)        Rust      │
+│   (PyO3)        (napi-rs)      (wasm-bindgen)       (core API)  │
+├───────────────────────────────────────────────────────────────┤
+│                   core.rs  —  pure-Rust engine                 │
+│       .proto compilation · JSON ↔ Protobuf · descriptor pool   │
+├───────────────────────────────────────────────────────────────┤
+│            protox  │  prost-reflect  │  serde_json             │
+└───────────────────────────────────────────────────────────────┘
 ```
+
+Each binding only translates types & errors around the core; building one target never pulls
+in another's dependencies.
 
 ## Features
 
 | Feature | Description |
 |---------|-------------|
 | **JSON ↔ Protobuf** | Bidirectional conversion with full type safety |
-| **Proto Compilation** | Compile `.proto` files without external tools |
-| **Nested Messages** | Full support for nested message types |
-| **Enums** | Automatic string ↔ number conversion |
-| **Repeated Fields** | Handle lists and arrays seamlessly |
-| **Maps** | Convert dictionary structures |
-| **Oneof Fields** | Support for union types |
-| **Pydantic Integration** | Direct conversion with `pydantic_to_protobuf()` and `protobuf_to_pydantic()` |
-
-## Next Steps
-
-- [**Install protoruf**](getting-started/installation.md) and get up and running
-- Follow the [**Quick Start**](getting-started/quick-start.md) to build your first proto message
-- Explore the [**User Guide**](guide/basic-usage.md) for detailed usage examples
-- Check the [**API Reference**](api/reference.md) for complete documentation
+| **Proto compilation** | Compile `.proto` files without external tools (`compileProtoFromSources` works in-memory, even in the browser) |
+| **Nested messages** | Full support for nested message types |
+| **Enums** | Automatic name ↔ number handling |
+| **Repeated fields & maps** | Lists, arrays and dictionary structures |
+| **Oneof fields** | Support for union types |
+| **DescriptorCache** | Pre-decoded pool for high-throughput conversion |
+| **Pydantic integration** | Python: direct `pydantic_to_protobuf()` / `protobuf_to_pydantic()` |

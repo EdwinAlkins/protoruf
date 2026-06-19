@@ -224,4 +224,5 @@ node_modules/
 # Generated JS/TS binding outputs: dist/ (napi) and dist/wasm/ (wasm-pack)
 /dist/
 *.node
-npm/
+# Note: napi/wasm build into dist/ — the npm/ directory holds *source* package
+# READMEs (npm/node/, npm/wasm/), so it is intentionally NOT ignored here.
