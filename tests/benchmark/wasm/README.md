@@ -19,7 +19,7 @@ These run **in Node** using the wasm-pack `nodejs` target (synchronous init — 
 The benchmarks import the compiled module from `dist/wasm/`. From the repo root:
 
 ```bash
-npm run build:wasm   # wasm-pack build --target nodejs --out-dir dist/wasm -- --features wasm
+npm run build:wasm   # wasm-pack (release + wasm-opt -Oz via Cargo.toml metadata)
 ```
 
 This needs the `wasm32-unknown-unknown` target and `wasm-pack`:
@@ -29,7 +29,9 @@ rustup target add wasm32-unknown-unknown
 cargo install wasm-pack
 ```
 
-> wasm-pack builds release by default — good. (A debug build would be much slower.)
+> wasm-pack builds release by default and runs `wasm-opt` with bulk-memory /
+> nontrapping-float-to-int enabled (see `[package.metadata.wasm-pack]` in
+> `Cargo.toml`). A debug build would be much slower.
 
 ## Run
 

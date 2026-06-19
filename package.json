@@ -38,8 +38,8 @@
   "scripts": {
     "build": "napi build dist --platform --release --features node --dts index.d.ts",
     "build:debug": "napi build dist --platform --features node --dts index.d.ts",
-    "build:wasm": "wasm-pack build --target nodejs --out-dir dist/wasm -- --features wasm && npx wasm-opt -Oz dist/wasm/protoruf_bg.wasm -o dist/wasm/protoruf_bg.wasm",
-    "build:wasm-web": "wasm-pack build --target web --out-dir dist/wasm-web -- --features wasm && npx wasm-opt -Oz dist/wasm-web/protoruf_bg.wasm -o dist/wasm-web/protoruf_bg.wasm",
+    "build:wasm": "wasm-pack build --target nodejs --out-dir dist/wasm -- --features wasm",
+    "build:wasm-web": "wasm-pack build --target web --out-dir dist/wasm-web -- --features wasm",
     "build:js": "npm run build:debug && npm run build:wasm",
     "pretest:js": "npm run build:js",
     "test:js": "vitest run",
@@ -49,7 +49,6 @@
   },
   "devDependencies": {
     "@napi-rs/cli": "^2.18.4",
-    "binaryen": "^118.0.0",
     "protobufjs": "^8.6.4",
     "vitest": "^2.1.9"
   },

@@ -56,6 +56,15 @@ harness = false
 [profile.release]
 strip = "symbols"
 
+# wasm-pack runs wasm-opt on release builds by default. Rust's wasm32 output uses
+# bulk-memory and nontrapping float-to-int ops; without these flags binaryen's
+# validator rejects the module (memory.copy / i64.trunc_sat_f64_*).
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ["-Oz", "--enable-bulk-memory", "--enable-nontrapping-float-to-int"]
+
+[package.metadata.wasm-pack.profile.dev]
+wasm-opt = false
+
 # Heavy optimization (full LTO + a single codegen unit) is very expensive at
 # compile time and would slow down every local rebuild (uv sync / maturin
 # develop build in release by default). We keep it in an opt-in `dist` profile,
