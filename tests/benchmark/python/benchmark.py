@@ -36,8 +36,9 @@ except ImportError:
 # ----------------------------------------------------------------------
 # Configuration
 # ----------------------------------------------------------------------
-PROTO_PATH = Path(__file__).parent / "proto" / "message.proto"
-DESC_PATH = Path(__file__).parent / "proto" / "message.desc"
+# Proto lives at tests/proto/ — three levels up from tests/benchmark/python/.
+PROTO_PATH = Path(__file__).parents[2] / "proto" / "message.proto"
+DESC_PATH = Path(__file__).parents[2] / "proto" / "message.desc"
 MESSAGE_TYPE = "message.Message"
 
 # Number of iterations (adjust to your machine)

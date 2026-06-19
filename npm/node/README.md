@@ -1,6 +1,10 @@
 # @protoruf/node
 
 <p align="center">
+  <img src="https://raw.githubusercontent.com/EdwinAlkins/protoruf/main/docs/assets/logo_js.png" alt="protoruf logo" width="200">
+</p>
+
+<p align="center">
   <strong>High-performance JSON ↔ Protobuf conversion for Node.js, powered by Rust.</strong>
 </p>
 

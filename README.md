@@ -2,6 +2,7 @@
 
 <p align="center">
   <img src="docs/assets/logo.png" alt="protoruf logo" width="200">
+  <img src="docs/assets/logo_js.png" alt="protoruf logo" width="200">
 </p>
 
 <p align="center">

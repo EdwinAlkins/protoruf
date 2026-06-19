@@ -49,6 +49,7 @@
   },
   "devDependencies": {
     "@napi-rs/cli": "^2.18.4",
+    "protobufjs": "^8.6.4",
     "vitest": "^2.1.9"
   },
   "files": [
