@@ -31,39 +31,72 @@ cargo test --lib       # Rust tests
 > ```
 
 Four benchmarks, deliberately **kept separate** to stay transparent about what is
-measured. They form a 2×2 grid: **small vs ~1 MB** message, and **free functions
+measured. They form a 2×2 grid: **small vs large** message, and **free functions
 (re-decode each call) vs `DescriptorCache` (decoded once)**.
 
 | File | protoruf scenario | Message | Descriptor decoded |
 | --- | --- | --- | --- |
 | `benchmark.py` | Free functions `json_to_protobuf` / `protobuf_to_json` | small (`tests/proto/message.proto`) | on **every** call |
 | `benchmark_hot_loop.py` | `DescriptorCache` | small (`tests/proto/message.proto`) | **once**, outside the loop |
-| `benchmark_large.py` | Free functions `json_to_protobuf` / `protobuf_to_json` | **~1 MB** (`proto/large.proto`) | on **every** call |
-| `benchmark_large_hot_loop.py` | `DescriptorCache` | **~1 MB** (`proto/large.proto`) | **once**, outside the loop |
+| `benchmark_large.py` | Free functions `json_to_protobuf` / `protobuf_to_json` | **5 000 records** (`proto/large.proto`) | on **every** call |
+| `benchmark_large_hot_loop.py` | `DescriptorCache` | **5 000 records** (`proto/large.proto`) | **once**, outside the loop |
 
 ```bash
-uv run python tests/benchmark/python/benchmark.py                  # small, "cold" (decode per call)
-uv run python tests/benchmark/python/benchmark_hot_loop.py         # small, hot loop (cached pool)
-uv run python tests/benchmark/python/benchmark_large.py            # ~1 MB, "cold" (decode per call)
-uv run python tests/benchmark/python/benchmark_large_hot_loop.py   # ~1 MB, hot loop (cached pool)
+uv run python tests/benchmark/python/benchmark.py > benchmark.txt # small, "cold" (decode per call)
+uv run python tests/benchmark/python/benchmark_hot_loop.py > benchmark_hot_loop.txt    # small, hot loop (cached pool)
+uv run python tests/benchmark/python/benchmark_large.py > benchmark_large.txt    # large, "cold" (decode per call)
+uv run python tests/benchmark/python/benchmark_large_hot_loop.py > benchmark_large_hot_loop.txt   # large, hot loop (cached pool)
 ```
+
+Shared timing logic lives in [`benchmark_utils.py`](benchmark_utils.py).
+
+### Methodology
+
+Each script prints system info (CPU, OS, Python, Rust, protobuf) and follows the
+same protocol:
+
+| Parameter | Small messages | Large messages |
+| --- | --- | --- |
+| Warmup | 1 000 iterations | 10 iterations |
+| Measured runs | 20 | 10 |
+| Conversions per run | 100 000 | 200 |
+| GC | disabled during measured runs | disabled during measured runs |
+| Reported stats | median, p95, stddev | median, p95, stddev |
+| Throughput | msg/s | msg/s **and** MB/s |
+| Memory | peak traced (tracemalloc) + RSS Δ on Linux | same |
+
+Before any timing, each script verifies a JSON ↔ Protobuf round-trip on the test
+payload. During timing, each scenario prints live progress (warmup, run *n*/*N*,
+memory sampling) so long runs do not appear stuck.
+
+**What is measured:** the full **JSON ↔ Protobuf conversion stack** — JSON parsing,
+serde/prost encode/decode, and JSON formatting — **not** raw protobuf encoding alone.
+Both sides use the same descriptor compiled by protoruf; on the `google.protobuf`
+side the factory/pool is built once outside the loop (google already caches its pool).
+
+Do **not** extrapolate results linearly to arbitrary message counts: cache effects,
+CPU boost, memory pressure, and allocator behaviour are not linear. The scripts report
+msg/s and MB/s only — there is no "projection for 1 M messages".
+
+The large benchmarks use a **fixed** dataset size (`N_RECORDS = 5 000`) for
+reproducibility; the actual JSON size (~1.4 MB) is printed at runtime.
+
+> The `google.protobuf` benchmark is optional: install it with
+> `uv sync --group benchmark` (otherwise only protoruf is measured).
+
+### Interpreting results
 
 - **`benchmark.py`** reflects the simplest usage: every conversion re-decodes the
   `DescriptorPool`. On a *small* message that fixed cost dominates, and protoruf
   there is roughly on par with (slightly below) `google.protobuf`.
 - **`benchmark_hot_loop.py`** reflects the recommended usage for high throughput:
-  the pool is decoded once via `DescriptorCache` and then reused. On the
-  `google.protobuf` side the factory/pool is likewise built once outside the
-  measured loop (google already caches its pool) — so the comparison is fair.
-  protoruf there is roughly **5× faster on writes** and **~11× on reads**.
+  the pool is decoded once via `DescriptorCache` and then reused. protoruf there
+  is typically several times faster on writes and reads (exact ratio depends on
+  your machine — run the benchmark locally).
 - **`benchmark_large.py` / `benchmark_large_hot_loop.py`** target the regime where
-  protoruf shines most: with a ~1 MB message the **payload conversion** dominates
-  the fixed per-call costs — so protoruf can show a real gain **even without** the
-  cache (`benchmark_large.py`), and the cache adds less on top than it does for
-  small messages. Both use a dedicated schema, [`proto/large.proto`](proto/large.proto)
-  (`bench.Dataset`: thousands of nested records with scalars, an enum, a repeated
-  field, a map and a vector of doubles), round-trip it for correctness, and report
-  throughput in **MB/s**.
+  the **payload conversion** dominates the fixed per-call costs — protoruf can show
+  a real gain **even without** the cache. Both use [`proto/large.proto`](proto/large.proto)
+  (`bench.Dataset`: nested records with scalars, enum, repeated field, map and vector).
 
-> The `google.protobuf` benchmark is optional: install it with
-> `uv sync --group benchmark` (otherwise only protoruf is measured).
+When citing speedup numbers, always specify the scenario (small/large, cached/uncached)
+and clarify that the comparison is JSON ↔ Protobuf conversion, not protobuf encode alone.

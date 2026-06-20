@@ -1,5 +1,5 @@
 // WASM · small message · free functions (descriptor re-decoded on every call).
-// Run: node tests/benchmark/wasm/benchmark.mjs   (after `npm run build:wasm`)
+// Run: node --expose-gc tests/benchmark/wasm/benchmark.mjs   (after `npm run build:wasm`)
 import {
   protoruf,
   SMALL_PROTO,
@@ -10,7 +10,9 @@ import {
   runScenario,
 } from "./common.mjs";
 
-const ITERATIONS = 50_000;
+const ITERATIONS = 10_000;
+const WARMUP_ITERATIONS = 1_000;
+const MEASURED_RUNS = 20;
 
 const descriptor = protoruf.compileProtoFromSources(SMALL_PROTO, SMALL_ROOT);
 const encode = (s) => protoruf.jsonToProtobuf(s, descriptor, SMALL_TYPE);
@@ -18,10 +20,15 @@ const decode = (b) => protoruf.protobufToJson(b, descriptor, false, SMALL_TYPE);
 const comparator = await setupProtobufjs(SMALL_PROTO, SMALL_ROOT, SMALL_TYPE);
 
 await runScenario({
-  label: "WASM · small message · free functions (decode per call)",
+  runtimeLabel: "protoruf (WASM)",
+  title: `Small-message results — free functions (WASM, ${ITERATIONS.toLocaleString()} conversions per run)`,
   jsonStr: SMALL_PAYLOAD,
   encode,
   decode,
   comparator,
   iterations: ITERATIONS,
+  warmupIterations: WARMUP_ITERATIONS,
+  measuredRuns: MEASURED_RUNS,
+  showMbS: false,
+  protorufLabel: "protoruf (free)",
 });

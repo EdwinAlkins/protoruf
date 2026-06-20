@@ -14,86 +14,59 @@ Uses the descriptor compiled by protoruf for both libraries, to avoid any
 external compilation with protoc.
 """
 
-import time
 import json
+import sys
 from pathlib import Path
 
-# --- protoruf -------------------------------------------------
-from protoruf import compile_proto, load_descriptor, json_to_protobuf, protobuf_to_json
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-# --- google.protobuf (optional, benchmark only) ---------------
+from benchmark_utils import (
+    BenchmarkStats,
+    create_google_message_factory,
+    format_stats_line,
+    print_comparison_table,
+    print_methodology,
+    print_system_info,
+    run_timed_benchmark,
+    warn_missing_google_protobuf,
+    HAS_GOOGLE_PROTOBUF,
+)
+
+from protoruf import compile_proto, json_to_protobuf, load_descriptor, protobuf_to_json
+
 try:
-    from google.protobuf import descriptor_pool, message_factory, json_format
-    from google.protobuf.descriptor_pb2 import FileDescriptorSet
-    from google.protobuf.internal.python_message import GeneratedProtocolMessageType
-
-    HAS_GOOGLE_PROTOBUF = True
+    from google.protobuf import json_format
 except ImportError:
-    HAS_GOOGLE_PROTOBUF = False
-    print("⚠️  google.protobuf not installed, only protoruf will be measured.")
-    print("   Install it with: uv add protobuf")
+    pass
 
-# ----------------------------------------------------------------------
-# Configuration
-# ----------------------------------------------------------------------
 # Proto lives at tests/proto/ — three levels up from tests/benchmark/python/.
 PROTO_PATH = Path(__file__).parents[2] / "proto" / "message.proto"
 DESC_PATH = Path(__file__).parents[2] / "proto" / "message.desc"
 MESSAGE_TYPE = "message.Message"
 
-# Number of iterations (adjust to your machine)
-ITERATIONS = 100_000  # 100k for a quick bench, 1M for the final table
+ITERATIONS = 10_000
+WARMUP_ITERATIONS = 1_000
+MEASURED_RUNS = 20
 
 
-def get_descriptor():
-    """Return the compiled descriptor (via protoruf)."""
+def get_descriptor() -> bytes:
     if not DESC_PATH.exists():
         compile_proto(PROTO_PATH, output_path=DESC_PATH)
     return load_descriptor(DESC_PATH)
 
 
-def create_google_message_factory(descriptor_bytes: bytes):
-    """
-    Build a factory to instantiate google.protobuf messages dynamically from the
-    FileDescriptorSet compiled by protoruf.
+def main() -> None:
+    print_system_info()
+    warn_missing_google_protobuf()
+    print_methodology(
+        warmup=WARMUP_ITERATIONS,
+        runs=MEASURED_RUNS,
+        iterations=ITERATIONS,
+    )
+    print("Preparing the benchmark (free functions, small message)...\n")
 
-    Returns:
-        tuple: (message_class, pool) where message_class is the message class
-               (or a callable that creates a new instance)
-    """
-    fds = FileDescriptorSet()
-    fds.ParseFromString(descriptor_bytes)
-
-    pool = descriptor_pool.DescriptorPool()
-    for file_proto in fds.file:
-        pool.Add(file_proto)
-
-    # Look up the message descriptor
-    msg_desc = pool.FindMessageTypeByName(MESSAGE_TYPE)
-
-    # API depends on the protobuf version:
-    #   - protobuf >= 5.x : module-level function message_factory.GetMessageClass()
-    #   - protobuf 4.x    : instance method factory.GetMessageClass()
-    #   - protobuf < 4.x  : instance method factory.GetPrototype()
-    if hasattr(message_factory, "GetMessageClass"):
-        message_class = message_factory.GetMessageClass(msg_desc)
-    else:
-        factory = message_factory.MessageFactory(pool=pool)
-        if hasattr(factory, "GetMessageClass"):
-            message_class = factory.GetMessageClass(msg_desc)
-        else:
-            message_class = factory.GetPrototype(msg_desc)
-
-    return message_class, pool
-
-
-def main():
-    print("Preparing the benchmark...\n")
-
-    # 1. Load the descriptor (protoruf)
     descriptor_bytes = get_descriptor()
 
-    # 2. Test data
     original_obj = {
         "id": "123",
         "content": "Hello World! This is a benchmark.",
@@ -106,152 +79,104 @@ def main():
         },
     }
     json_str = json.dumps(original_obj)
+    payload_bytes = len(json_str)
 
-    # Prepare the protobuf bytes for the read benchmark
     proto_bytes = json_to_protobuf(json_str, descriptor_bytes, MESSAGE_TYPE)
+    restored = json.loads(protobuf_to_json(proto_bytes, descriptor_bytes, message_type=MESSAGE_TYPE))
+    assert restored == original_obj, "round-trip mismatch"
+    print(f"Payload: JSON = {payload_bytes} bytes   Protobuf = {len(proto_bytes)} bytes\n")
 
-    # 3. google.protobuf setup (if available)
     google_ok = HAS_GOOGLE_PROTOBUF
+    MessageFactory = None
+    google_proto_bytes = b""
+
     if google_ok:
         try:
-            MessageFactory, pool = create_google_message_factory(descriptor_bytes)
-
-            # Build a google.protobuf message from the JSON
-            if callable(MessageFactory):
-                # If it is a function, call it
-                google_msg = json_format.Parse(json_str, MessageFactory())
-            else:
-                # If it is a class, instantiate it
-                google_msg = json_format.Parse(json_str, MessageFactory())
-
+            MessageFactory = create_google_message_factory(descriptor_bytes, MESSAGE_TYPE)
+            google_msg = json_format.Parse(json_str, MessageFactory())
             google_proto_bytes = google_msg.SerializeToString()
-
-            print(f"✅ google.protobuf set up successfully")
-            print(f"   Message type: {type(google_msg).__name__}")
-            print(f"   Binary size: {len(google_proto_bytes)} bytes\n")
-
+            print("✅ google.protobuf set up successfully\n")
         except Exception as e:
             print(f"⚠️  Error while setting up google.protobuf: {e}")
             print("   The benchmark will only cover protoruf.\n")
             google_ok = False
 
-    # 4. Run the benchmarks
-    results = {}
+    def protoruf_write() -> None:
+        for _ in range(ITERATIONS):
+            _ = json_to_protobuf(json_str, descriptor_bytes, MESSAGE_TYPE)
 
-    # ----- Write (JSON -> Protobuf) -----
-    # protoruf
-    print(f"protoruf write benchmark ({ITERATIONS:,} iterations)...")
-    start = time.perf_counter()
-    for _ in range(ITERATIONS):
-        _ = json_to_protobuf(json_str, descriptor_bytes, MESSAGE_TYPE)
-    t_protoruf_write = time.perf_counter() - start
-    results["protoruf_write"] = t_protoruf_write
-    print(f"  → {t_protoruf_write:.4f}s ({ITERATIONS / t_protoruf_write:,.0f} msg/s)\n")
+    def protoruf_read() -> None:
+        for _ in range(ITERATIONS):
+            _ = protobuf_to_json(proto_bytes, descriptor_bytes, message_type=MESSAGE_TYPE)
 
-    # google.protobuf
+    print(f"protoruf write ({MEASURED_RUNS} runs × {ITERATIONS:,} iterations)...")
+    protoruf_write_stats = run_timed_benchmark(
+        protoruf_write,
+        iterations=ITERATIONS,
+        payload_bytes=payload_bytes,
+        warmup_iterations=WARMUP_ITERATIONS,
+        measured_runs=MEASURED_RUNS,
+        label="protoruf write",
+    )
+    print(format_stats_line(protoruf_write_stats, show_mb_s=False) + "\n")
+
+    google_write_stats: BenchmarkStats | None = None
     if google_ok:
-        print(f"google.protobuf write benchmark ({ITERATIONS:,} iterations)...")
-        start = time.perf_counter()
-        if callable(MessageFactory):
+        def google_write() -> None:
             for _ in range(ITERATIONS):
                 msg = json_format.Parse(json_str, MessageFactory())
                 _ = msg.SerializeToString()
-        else:
-            for _ in range(ITERATIONS):
-                msg = json_format.Parse(json_str, MessageFactory())
-                _ = msg.SerializeToString()
-        t_google_write = time.perf_counter() - start
-        results["google_write"] = t_google_write
-        print(f"  → {t_google_write:.4f}s ({ITERATIONS / t_google_write:,.0f} msg/s)\n")
 
-    # ----- Read (Protobuf -> JSON) -----
-    # protoruf
-    print(f"protoruf read benchmark ({ITERATIONS:,} iterations)...")
-    start = time.perf_counter()
-    for _ in range(ITERATIONS):
-        _ = protobuf_to_json(proto_bytes, descriptor_bytes, message_type=MESSAGE_TYPE)
-    t_protoruf_read = time.perf_counter() - start
-    results["protoruf_read"] = t_protoruf_read
-    print(f"  → {t_protoruf_read:.4f}s ({ITERATIONS / t_protoruf_read:,.0f} msg/s)\n")
+        print(f"google.protobuf write ({MEASURED_RUNS} runs × {ITERATIONS:,} iterations)...")
+        google_write_stats = run_timed_benchmark(
+            google_write,
+            iterations=ITERATIONS,
+            payload_bytes=payload_bytes,
+            warmup_iterations=WARMUP_ITERATIONS,
+            measured_runs=MEASURED_RUNS,
+            label="google.protobuf write",
+        )
+        print(format_stats_line(google_write_stats, show_mb_s=False) + "\n")
 
-    # google.protobuf
+    print(f"protoruf read ({MEASURED_RUNS} runs × {ITERATIONS:,} iterations)...")
+    protoruf_read_stats = run_timed_benchmark(
+        protoruf_read,
+        iterations=ITERATIONS,
+        payload_bytes=payload_bytes,
+        warmup_iterations=WARMUP_ITERATIONS,
+        measured_runs=MEASURED_RUNS,
+        label="protoruf read",
+    )
+    print(format_stats_line(protoruf_read_stats, show_mb_s=False) + "\n")
+
+    google_read_stats: BenchmarkStats | None = None
     if google_ok:
-        print(f"google.protobuf read benchmark ({ITERATIONS:,} iterations)...")
-        start = time.perf_counter()
-        if callable(MessageFactory):
+        def google_read() -> None:
             for _ in range(ITERATIONS):
                 msg = MessageFactory()
                 msg.ParseFromString(google_proto_bytes)
                 _ = json_format.MessageToJson(msg)
-        else:
-            for _ in range(ITERATIONS):
-                msg = MessageFactory()
-                msg.ParseFromString(google_proto_bytes)
-                _ = json_format.MessageToJson(msg)
-        t_google_read = time.perf_counter() - start
-        results["google_read"] = t_google_read
-        print(f"  → {t_google_read:.4f}s ({ITERATIONS / t_google_read:,.0f} msg/s)\n")
 
-    # 5. Print the comparison table
-    print("=" * 80)
-    print(f"Results for {ITERATIONS:,} messages")
-    print("=" * 80)
-    header = f"{'Operation':<30} {'google.protobuf':<20} {'protoruf (Rust)':<20} {'Gain':<10}"
-    print(header)
-    print("-" * len(header))
+        print(f"google.protobuf read ({MEASURED_RUNS} runs × {ITERATIONS:,} iterations)...")
+        google_read_stats = run_timed_benchmark(
+            google_read,
+            iterations=ITERATIONS,
+            payload_bytes=payload_bytes,
+            warmup_iterations=WARMUP_ITERATIONS,
+            measured_runs=MEASURED_RUNS,
+            label="google.protobuf read",
+        )
+        print(format_stats_line(google_read_stats, show_mb_s=False) + "\n")
 
-    if google_ok:
-        # Write (serialization)
-        g_write = results["google_write"]
-        p_write = results["protoruf_write"]
-        gain_write = (1 - p_write / g_write) * 100
-        print(
-            f"{'Serialization (JSON→Proto)':<30} {g_write:>8.4f}s        {p_write:>8.4f}s        {gain_write:>5.1f}%"
-        )
-
-        # Read (parsing)
-        g_read = results["google_read"]
-        p_read = results["protoruf_read"]
-        gain_read = (1 - p_read / g_read) * 100
-        print(
-            f"{'Parsing (Proto→JSON)':<30} {g_read:>8.4f}s        {p_read:>8.4f}s        {gain_read:>5.1f}%"
-        )
-    else:
-        # protoruf-only display
-        print(
-            f"{'Serialization (JSON→Proto)':<30} {'N/A':<20} {results['protoruf_write']:>8.4f}s        {'':<10}"
-        )
-        print(
-            f"{'Parsing (Proto→JSON)':<30} {'N/A':<20} {results['protoruf_read']:>8.4f}s        {'':<10}"
-        )
-
-    # 6. Projected table for 1M messages
-    print(f"\n📊 Projection for 1,000,000 messages:\n")
-    factor = 1_000_000 / ITERATIONS
-
-    print(f"{'Operation':<30} {'google.protobuf':<15} {'protoruf (Rust)':<15}")
-    print("-" * 60)
-
-    if google_ok:
-        print(
-            f"{'Serialization (1M)':<30} {results['google_write'] * factor:>6.2f}s         {results['protoruf_write'] * factor:>6.2f}s"
-        )
-        print(
-            f"{'Parsing (1M)':<30} {results['google_read'] * factor:>6.2f}s         {results['protoruf_read'] * factor:>6.2f}s"
-        )
-
-        # Speedup
-        speedup_write = results["google_write"] / results["protoruf_write"]
-        speedup_read = results["google_read"] / results["protoruf_read"]
-        print(f"\n   → protoruf is {speedup_write:.1f}x faster on writes")
-        print(f"   → protoruf is {speedup_read:.1f}x faster on reads")
-    else:
-        print(
-            f"{'Serialization (1M)':<30} {'N/A':<15} {results['protoruf_write'] * factor:>6.2f}s"
-        )
-        print(
-            f"{'Parsing (1M)':<30} {'N/A':<15} {results['protoruf_read'] * factor:>6.2f}s"
-        )
+    print_comparison_table(
+        f"Small-message results — free functions ({ITERATIONS:,} conversions per run)",
+        [
+            ("Serialization (JSON→Proto)", google_write_stats, protoruf_write_stats),
+            ("Parsing (Proto→JSON)", google_read_stats, protoruf_read_stats),
+        ],
+        show_mb_s=False,
+        protoruf_label="protoruf (free)",
+    )
 
 
 if __name__ == "__main__":

@@ -1,5 +1,5 @@
 // WASM · small message · DescriptorCache (pool decoded once, outside the loop).
-// Run: node tests/benchmark/wasm/benchmark_hot_loop.mjs   (after `npm run build:wasm`)
+// Run: node --expose-gc tests/benchmark/wasm/benchmark_hot_loop.mjs   (after `npm run build:wasm`)
 import {
   protoruf,
   SMALL_PROTO,
@@ -10,7 +10,9 @@ import {
   runScenario,
 } from "./common.mjs";
 
-const ITERATIONS = 50_000;
+const ITERATIONS = 10_000;
+const WARMUP_ITERATIONS = 1_000;
+const MEASURED_RUNS = 20;
 
 const descriptor = protoruf.compileProtoFromSources(SMALL_PROTO, SMALL_ROOT);
 const cache = new protoruf.DescriptorCache(descriptor);
@@ -19,12 +21,17 @@ const decode = (b) => cache.protobufToJson(b, SMALL_TYPE, false);
 const comparator = await setupProtobufjs(SMALL_PROTO, SMALL_ROOT, SMALL_TYPE);
 
 await runScenario({
-  label: "WASM · small message · DescriptorCache (decoded once)",
+  runtimeLabel: "protoruf (WASM)",
+  title: `Small-message results — DescriptorCache (WASM, ${ITERATIONS.toLocaleString()} conversions per run)`,
   jsonStr: SMALL_PAYLOAD,
   encode,
   decode,
   comparator,
   iterations: ITERATIONS,
+  warmupIterations: WARMUP_ITERATIONS,
+  measuredRuns: MEASURED_RUNS,
+  showMbS: false,
+  protorufLabel: "protoruf (cache)",
 });
 
 cache.free(); // WASM objects own linear-memory state — release it
