@@ -75,6 +75,38 @@ Load a pre-compiled descriptor set from a file.
 
 ---
 
+### `compile_proto_from_sources(files, root, include_imports=True, output_path=None)`
+
+Compile `.proto` sources held in memory, with no filesystem access. Useful when
+your schemas are generated at runtime, fetched over the network, or stored in a
+database. `import` statements are resolved by name against the `files` mapping,
+and Google well-known types are resolved automatically.
+
+| Parameter         | Type             | Description                                         |
+|-------------------|------------------|-----------------------------------------------------|
+| `files`           | `dict[str, str]` | Mapping of file name → `.proto` source text         |
+| `root`            | `str`            | Entry file to compile (must be a key of `files`)    |
+| `include_imports` | `bool`           | Embed imported files in the descriptor (default `True`) |
+| `output_path`     | `str \| None`    | Optional path to save the descriptor                |
+
+**Returns:** `bytes` — The compiled descriptor set.
+
+```python
+from protoruf import compile_proto_from_sources
+
+files = {
+    "user.proto": """
+syntax = "proto3";
+package user;
+message User { string id = 1; string email = 2; }
+""",
+}
+
+descriptor = compile_proto_from_sources(files, root="user.proto")
+```
+
+---
+
 ### `json_to_protobuf(json_str, descriptor_bytes, message_type)`
 
 Convert a JSON string to a Protobuf message.

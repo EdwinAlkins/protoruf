@@ -20,7 +20,7 @@ cd protoruf
 ### 2. Install Dependencies
 
 ```bash
-uv sync --dev
+uv sync --dev --group benchmark --group docs
 ```
 
 This installs all development dependencies including `maturin`, `pytest`, and `mypy`.

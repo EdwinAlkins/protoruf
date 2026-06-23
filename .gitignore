@@ -226,3 +226,5 @@ node_modules/
 *.node
 # Note: napi/wasm build into dist/ — the npm/ directory holds *source* package
 # READMEs (npm/node/, npm/wasm/), so it is intentionally NOT ignored here.
+
+/dev-docs/no-git/*

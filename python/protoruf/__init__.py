@@ -2,7 +2,7 @@
 from typing import Type, TypeVar
 
 from . import _protoruf
-from .compiler import compile_proto, load_descriptor
+from .compiler import compile_proto, load_descriptor, compile_proto_from_sources
 
 from pydantic import BaseModel
 
@@ -14,6 +14,7 @@ __all__ = [
     "protobuf_to_json",
     "compile_proto",
     "load_descriptor",
+    "compile_proto_from_sources",
     "protobuf_to_pydantic",
     "DescriptorCache",
 ]

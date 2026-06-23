@@ -87,6 +87,57 @@ descriptor = load_descriptor("schema.desc")
 
 ---
 
+### `compile_proto_from_sources()`
+
+Compile `.proto` sources held in memory, with no filesystem access. `import`
+statements are resolved by name against the `files` mapping, and Google well-known
+types are resolved automatically.
+
+```python
+def compile_proto_from_sources(
+    files: dict[str, str],
+    root: str,
+    include_imports: bool = True,
+    output_path: str | Path | None = None,
+) -> bytes
+```
+
+#### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `files` | `dict[str, str]` | Yes | Mapping of file name → `.proto` source text |
+| `root` | `str` | Yes | Entry file to compile (must be a key of `files`) |
+| `include_imports` | `bool` | No | Embed imported files in the descriptor (default `True`) |
+| `output_path` | `str \| Path` | No | Optional path to save the descriptor |
+
+#### Returns
+
+`bytes` — The compiled descriptor set. Identical to what `compile_proto()` would
+produce for the same sources.
+
+#### Raises
+
+- `ValueError` — If `root` is missing from `files` or a source fails to compile
+
+#### Example
+
+```python
+from protoruf import compile_proto_from_sources
+
+files = {
+    "user.proto": """
+syntax = "proto3";
+package user;
+message User { string id = 1; string email = 2; }
+""",
+}
+
+descriptor = compile_proto_from_sources(files, root="user.proto")
+```
+
+---
+
 ### `json_to_protobuf()`
 
 Convert a JSON string to a Protobuf message.
@@ -362,6 +413,7 @@ protoruf includes complete type stubs for IDE autocomplete and type checking:
 ```python
 # _protoruf.pyi
 def compile_proto(proto_path: str, include_paths: list[str] | None = None) -> bytes: ...
+def compile_proto_from_sources(files: dict[str, str], root: str, include_imports: bool = True) -> bytes: ...
 def json_to_protobuf(json_str: str, descriptor_bytes: bytes, message_type: str) -> bytes: ...
 def protobuf_to_json(protobuf_bytes: bytes, descriptor_bytes: bytes, pretty: bool = False, message_type: str = ...) -> str: ...
 
@@ -381,6 +433,7 @@ __all__ = [
     "protobuf_to_json",
     "compile_proto",
     "load_descriptor",
+    "compile_proto_from_sources",
     "protobuf_to_pydantic",
     "DescriptorCache",
 ]

@@ -22,6 +22,13 @@ def protobuf_to_json(
 ) -> str: ...
 
 
+def compile_proto_from_sources(
+    files: dict[str, str],
+    root: str,
+    include_imports: bool = True,
+) -> bytes: ...
+
+
 class DescriptorCache:
     """A reusable, pre-decoded descriptor pool."""
 
