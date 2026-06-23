@@ -1,14 +1,20 @@
 //! Global LRU cache for decoded [`DescriptorPool`] instances (cold-path API).
 
+use lru::LruCache;
 use prost_reflect::DescriptorPool;
 use std::num::NonZeroUsize;
 use std::sync::{Arc, LazyLock, Mutex};
-use lru::LruCache;
 
 const MAX_POOL_CACHE_ENTRIES: usize = 64;
 
-static POOL_CACHE: LazyLock<Mutex<LruCache<Arc<[u8]>, Arc<DescriptorPool>>>> =
-    LazyLock::new(|| Mutex::new(LruCache::new(NonZeroUsize::new(MAX_POOL_CACHE_ENTRIES).unwrap())));
+/// LRU cache keyed by the raw descriptor-set bytes, holding decoded pools.
+type PoolCache = LruCache<Arc<[u8]>, Arc<DescriptorPool>>;
+
+static POOL_CACHE: LazyLock<Mutex<PoolCache>> = LazyLock::new(|| {
+    Mutex::new(LruCache::new(
+        NonZeroUsize::new(MAX_POOL_CACHE_ENTRIES).unwrap(),
+    ))
+});
 
 /// Decode a descriptor set, memoizing the resulting pool keyed by the raw bytes.
 pub fn load_descriptor_pool_cached(bytes: &[u8]) -> Result<Arc<DescriptorPool>, String> {

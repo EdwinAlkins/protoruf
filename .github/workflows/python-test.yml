@@ -28,3 +28,5 @@ jobs:
         run: uv run maturin develop
       - name: Run pytest
         run: uv run pytest
+      - name: Run mypy
+        run: uv run mypy python/protoruf/ --ignore-missing-imports

@@ -13,10 +13,7 @@ use std::collections::HashMap;
 
 /// Compile a `.proto` file from disk to a descriptor set.
 #[napi]
-pub fn compile_proto(
-    proto_path: String,
-    include_paths: Option<Vec<String>>,
-) -> Result<Buffer> {
+pub fn compile_proto(proto_path: String, include_paths: Option<Vec<String>>) -> Result<Buffer> {
     core::compile_proto(&proto_path, include_paths)
         .map(Buffer::from)
         .map_err(|e| Error::from_reason(e))
@@ -84,11 +81,7 @@ impl DescriptorCache {
     }
 
     #[napi]
-    pub fn json_to_protobuf(
-        &self,
-        json_str: String,
-        message_type: String,
-    ) -> Result<Buffer> {
+    pub fn json_to_protobuf(&self, json_str: String, message_type: String) -> Result<Buffer> {
         let desc = self
             .resolver
             .resolve(&message_type)

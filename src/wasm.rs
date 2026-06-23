@@ -66,11 +66,7 @@ impl DescriptorCache {
     }
 
     #[wasm_bindgen(js_name = jsonToProtobuf)]
-    pub fn json_to_protobuf(
-        &self,
-        json_str: &str,
-        message_type: &str,
-    ) -> Result<Vec<u8>, JsError> {
+    pub fn json_to_protobuf(&self, json_str: &str, message_type: &str) -> Result<Vec<u8>, JsError> {
         let desc = self
             .resolver
             .resolve(message_type)

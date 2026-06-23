@@ -13,9 +13,8 @@ use std::collections::HashMap;
 #[pyfunction]
 #[pyo3(signature = (proto_path, include_paths = None))]
 fn compile_proto(proto_path: &str, include_paths: Option<Vec<String>>) -> PyResult<Vec<u8>> {
-    core::compile_proto(proto_path, include_paths).map_err(|e| {
-        PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e)
-    })
+    core::compile_proto(proto_path, include_paths)
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))
 }
 
 /// Compile a set of .proto files provided in memory (no filesystem access)
@@ -26,9 +25,8 @@ fn compile_proto_from_sources(
     root: &str,
     include_imports: bool,
 ) -> PyResult<Vec<u8>> {
-    core::compile_proto_from_sources(files, root, include_imports).map_err(|e| {
-        PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e)
-    })
+    core::compile_proto_from_sources(files, root, include_imports)
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))
 }
 
 /// Convert a JSON string to a Protobuf message (bytes)

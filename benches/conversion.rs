@@ -1,7 +1,8 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use protoruf::core;
 use protoruf::descriptor_resolver::DescriptorResolver;
 use std::collections::HashMap;
+use std::hint::black_box;
 use std::path::PathBuf;
 
 fn test_descriptor() -> Vec<u8> {
@@ -30,8 +31,12 @@ fn bench_cold_json_to_proto(c: &mut Criterion) {
 
     c.bench_function("cold_json_to_proto", |b| {
         b.iter(|| {
-            core::json_to_protobuf_bytes(black_box(&json), black_box(&descriptor), "message.Message")
-                .unwrap()
+            core::json_to_protobuf_bytes(
+                black_box(&json),
+                black_box(&descriptor),
+                "message.Message",
+            )
+            .unwrap()
         });
     });
 }

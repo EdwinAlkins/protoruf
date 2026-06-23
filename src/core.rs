@@ -26,7 +26,10 @@ fn serialize_options() -> SerializeOptions {
 /// the WASM target deliberately omits it (use [`compile_proto_from_sources`]).
 /// Allow it to be unused in wasm-only builds without a warning.
 #[cfg_attr(not(any(feature = "python", feature = "node", test)), allow(dead_code))]
-pub fn compile_proto(proto_path: &str, include_paths: Option<Vec<String>>) -> Result<Vec<u8>, String> {
+pub fn compile_proto(
+    proto_path: &str,
+    include_paths: Option<Vec<String>>,
+) -> Result<Vec<u8>, String> {
     let proto_path = PathBuf::from(proto_path);
 
     // Determine include paths
@@ -41,7 +44,7 @@ pub fn compile_proto(proto_path: &str, include_paths: Option<Vec<String>>) -> Re
     let include_paths_ref: Vec<&str> = include_paths.iter().map(|s| s.as_str()).collect();
 
     // Compile using protox
-    let file_descriptor_set = protox::compile(&[&proto_path], &include_paths_ref)
+    let file_descriptor_set = protox::compile([&proto_path], &include_paths_ref)
         .map_err(|e| format!("Failed to compile proto file: {}", e))?;
 
     // Serialize to bytes
@@ -114,9 +117,8 @@ pub fn get_message_descriptor(
     pool: &DescriptorPool,
     message_type: &str,
 ) -> Result<MessageDescriptor, String> {
-    pool.get_message_by_name(message_type).ok_or_else(|| {
-        format!("Message type '{}' not found in descriptor", message_type)
-    })
+    pool.get_message_by_name(message_type)
+        .ok_or_else(|| format!("Message type '{}' not found in descriptor", message_type))
 }
 
 /// Convert a JSON string to Protobuf bytes using an owned message descriptor.
@@ -228,8 +230,8 @@ mod tests {
     use serde_json::Value as JsonValue;
 
     fn get_test_descriptor() -> Vec<u8> {
-        let proto_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("tests/proto/message.proto");
+        let proto_path =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/proto/message.proto");
         compile_proto(proto_path.to_str().unwrap(), None).unwrap()
     }
 
@@ -257,11 +259,14 @@ mod tests {
         }"#;
 
         // JSON -> Protobuf
-        let protobuf_bytes = json_to_protobuf_bytes(json_input, &descriptor, "message.Message").unwrap();
+        let protobuf_bytes =
+            json_to_protobuf_bytes(json_input, &descriptor, "message.Message").unwrap();
         assert!(!protobuf_bytes.is_empty());
 
         // Protobuf -> JSON
-        let json_output = protobuf_to_json_string(&protobuf_bytes, &descriptor, false, "message.Message").unwrap();
+        let json_output =
+            protobuf_to_json_string(&protobuf_bytes, &descriptor, false, "message.Message")
+                .unwrap();
 
         // Verify roundtrip
         let result: JsonValue = serde_json::from_str(&json_output).unwrap();
@@ -289,7 +294,8 @@ mod tests {
         let protobuf_bytes =
             json_to_protobuf_bytes(json_input, &descriptor, "message.Message").unwrap();
         let json_output =
-            protobuf_to_json_string(&protobuf_bytes, &descriptor, false, "message.Message").unwrap();
+            protobuf_to_json_string(&protobuf_bytes, &descriptor, false, "message.Message")
+                .unwrap();
 
         let result: JsonValue = serde_json::from_str(&json_output).unwrap();
         let attrs = &result["metadata"]["attributes"];
@@ -303,7 +309,8 @@ mod tests {
         let descriptor = get_test_descriptor();
         let json_input = r#"{"id": "1", "content": "Simple"}"#;
 
-        let protobuf_bytes = json_to_protobuf_bytes(json_input, &descriptor, "message.Message").unwrap();
+        let protobuf_bytes =
+            json_to_protobuf_bytes(json_input, &descriptor, "message.Message").unwrap();
         assert!(!protobuf_bytes.is_empty());
     }
 
@@ -312,8 +319,10 @@ mod tests {
         let descriptor = get_test_descriptor();
         let json_input = r#"{"id": "1", "content": "Pretty test"}"#;
 
-        let protobuf_bytes = json_to_protobuf_bytes(json_input, &descriptor, "message.Message").unwrap();
-        let pretty_json = protobuf_to_json_string(&protobuf_bytes, &descriptor, true, "message.Message").unwrap();
+        let protobuf_bytes =
+            json_to_protobuf_bytes(json_input, &descriptor, "message.Message").unwrap();
+        let pretty_json =
+            protobuf_to_json_string(&protobuf_bytes, &descriptor, true, "message.Message").unwrap();
 
         // Pretty JSON should contain newlines
         assert!(pretty_json.contains('\n'));
@@ -365,8 +374,10 @@ mod tests {
             }
         }"#;
 
-        let protobuf_bytes = json_to_protobuf_bytes(json_input, &descriptor, "message.Message").unwrap();
-        let json_output = protobuf_to_json_string(&protobuf_bytes, &descriptor, true, "message.Message").unwrap();
+        let protobuf_bytes =
+            json_to_protobuf_bytes(json_input, &descriptor, "message.Message").unwrap();
+        let json_output =
+            protobuf_to_json_string(&protobuf_bytes, &descriptor, true, "message.Message").unwrap();
 
         let result: JsonValue = serde_json::from_str(&json_output).unwrap();
         assert_eq!(result["id"], "full-test");
@@ -380,8 +391,11 @@ mod tests {
         let descriptor = get_test_descriptor();
         let json_input = r#"{"id": "minimal"}"#;
 
-        let protobuf_bytes = json_to_protobuf_bytes(json_input, &descriptor, "message.Message").unwrap();
-        let json_output = protobuf_to_json_string(&protobuf_bytes, &descriptor, false, "message.Message").unwrap();
+        let protobuf_bytes =
+            json_to_protobuf_bytes(json_input, &descriptor, "message.Message").unwrap();
+        let json_output =
+            protobuf_to_json_string(&protobuf_bytes, &descriptor, false, "message.Message")
+                .unwrap();
 
         let result: JsonValue = serde_json::from_str(&json_output).unwrap();
         assert_eq!(result["id"], "minimal");
@@ -499,7 +513,9 @@ mod tests {
         assert!(!descriptor.is_empty());
 
         // The descriptor must be usable for a normal round-trip.
-        let pb = json_to_protobuf_bytes(r#"{"id":"123","tags":["a","b"]}"#, &descriptor, "user.User").unwrap();
+        let pb =
+            json_to_protobuf_bytes(r#"{"id":"123","tags":["a","b"]}"#, &descriptor, "user.User")
+                .unwrap();
         let json = protobuf_to_json_string(&pb, &descriptor, false, "user.User").unwrap();
         let result: JsonValue = serde_json::from_str(&json).unwrap();
         assert_eq!(result["id"], "123");
@@ -517,7 +533,8 @@ mod tests {
         ]);
 
         let descriptor = compile_proto_from_sources(files, "user.proto", true).unwrap();
-        let pb = json_to_protobuf_bytes(r#"{"id":{"value":"x"}}"#, &descriptor, "user.User").unwrap();
+        let pb =
+            json_to_protobuf_bytes(r#"{"id":{"value":"x"}}"#, &descriptor, "user.User").unwrap();
         let json = protobuf_to_json_string(&pb, &descriptor, false, "user.User").unwrap();
         let result: JsonValue = serde_json::from_str(&json).unwrap();
         assert_eq!(result["id"]["value"], "x");
@@ -538,7 +555,8 @@ mod tests {
     #[test]
     fn test_compile_from_sources_matches_compile_proto() {
         // In-memory compilation must produce a descriptor equivalent to the FS-based one.
-        let proto_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/proto/message.proto");
+        let proto_path =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/proto/message.proto");
         let source = std::fs::read_to_string(&proto_path).unwrap();
         let files = HashMap::from([("message.proto".to_string(), source)]);
 
@@ -547,7 +565,8 @@ mod tests {
         // Both descriptors must resolve the same message and round-trip identically.
         let json_input = r#"{"id":"1","content":"hi"}"#;
         let a = json_to_protobuf_bytes(json_input, &from_sources, "message.Message").unwrap();
-        let b = json_to_protobuf_bytes(json_input, &get_test_descriptor(), "message.Message").unwrap();
+        let b =
+            json_to_protobuf_bytes(json_input, &get_test_descriptor(), "message.Message").unwrap();
         assert_eq!(a, b);
     }
 
@@ -559,7 +578,10 @@ mod tests {
 
     #[test]
     fn test_compile_from_sources_invalid_syntax() {
-        let files = HashMap::from([("bad.proto".to_string(), "this is not valid proto".to_string())]);
+        let files = HashMap::from([(
+            "bad.proto".to_string(),
+            "this is not valid proto".to_string(),
+        )]);
         assert!(compile_proto_from_sources(files, "bad.proto", true).is_err());
     }
 }
