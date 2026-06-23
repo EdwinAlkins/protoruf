@@ -20,10 +20,10 @@ Repository = "https://github.com/EdwinAlkins/protoruf"
 
 [dependency-groups]
 dev = [
+    "maturin>=1.14.1",
+    "mypy>=2.1.0",
     "pytest>=9.1.0",
     "pytest-asyncio>=1.4.0",
-    "maturin>=1.14.0",
-    "mypy>=2.1.0",
     "twine>=6.2.0",
 ]
 benchmark = [
