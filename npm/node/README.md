@@ -11,7 +11,7 @@
 <p align="center">
   <a href="https://EdwinAlkins.github.io/protoruf/">📖 Documentation</a> •
   <a href="https://github.com/EdwinAlkins/protoruf">💻 Source</a> •
-  <a href="https://www.npmjs.com/package/@protoruf/node">📦 npm</a>
+  <a href="https://github.com/EdwinAlkins/protoruf/releases">📦 Releases</a>
 </p>
 
 ---
@@ -21,17 +21,21 @@ no `protoc`, no generated classes. Compile a `.proto` to a descriptor once, then
 both directions at Rust speed.
 
 This is the Node.js target of [protoruf](https://github.com/EdwinAlkins/protoruf); the same
-Rust core also ships for [Python](https://pypi.org/project/protoruf/), the
-[browser (WASM)](https://www.npmjs.com/package/@protoruf/wasm) and Rust.
+Rust core also ships for [Python](https://pypi.org/project/protoruf/), the browser (WASM) and
+Rust.
 
 ## Install
 
+The npm registry release is coming soon. For now, install the prebuilt package from the
+[GitHub Releases page](https://github.com/EdwinAlkins/protoruf/releases) by URL:
+
 ```bash
-npm i @protoruf/node
+npm install https://github.com/EdwinAlkins/protoruf/releases/download/v0.2.0/protoruf-node-0.2.0.tgz
 ```
 
-Prebuilt binaries are published per platform (Linux / macOS / Windows × x64 / arm64) and
-selected automatically at install time.
+The tarball is self-contained: it bundles the native binary for every supported platform
+(Linux / macOS / Windows × x64 / arm64) and the loader selects the right one at runtime — no
+Rust toolchain required.
 
 ## Usage
 

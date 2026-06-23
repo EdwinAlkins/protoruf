@@ -8,8 +8,8 @@
   <a href="https://pypi.org/project/protoruf/">
     <img src="https://img.shields.io/pypi/v/protoruf?color=blue&logo=pypi" alt="PyPI Version">
   </a>
-  <a href="https://www.npmjs.com/package/@protoruf/node">
-    <img src="https://img.shields.io/npm/v/@protoruf/node?color=red&logo=npm&label=%40protoruf%2Fnode" alt="npm node">
+  <a href="https://github.com/EdwinAlkins/protoruf/releases">
+    <img src="https://img.shields.io/github/v/release/EdwinAlkins/protoruf?color=red&logo=github&label=node%20%26%20wasm" alt="GitHub release">
   </a>
   <a href="https://github.com/EdwinAlkins/protoruf/blob/main/LICENSE">
     <img src="https://img.shields.io/github/license/EdwinAlkins/protoruf?color=blue" alt="License">
@@ -31,8 +31,8 @@ conversion logic is shared, never duplicated:
 | Target | Package | Install |
 |---|---|---|
 | **Python** | [`protoruf`](https://pypi.org/project/protoruf/) | `pip install protoruf` |
-| **Node.js** | [`@protoruf/node`](https://www.npmjs.com/package/@protoruf/node) | `npm i @protoruf/node` |
-| **Browser (WASM)** | [`@protoruf/wasm`](https://www.npmjs.com/package/@protoruf/wasm) | `npm i @protoruf/wasm` |
+| **Node.js** | `@protoruf/node` | from [GitHub Releases](https://github.com/EdwinAlkins/protoruf/releases) by URL — npm coming soon ([guide](node/installation.md)) |
+| **Browser (WASM)** | `@protoruf/wasm` | from [GitHub Releases](https://github.com/EdwinAlkins/protoruf/releases) by URL — npm coming soon ([guide](browser/installation.md)) |
 | **Rust** | core crate | — |
 
 ### Why protoruf?
@@ -59,7 +59,8 @@ conversion logic is shared, never duplicated:
 
     ---
 
-    `npm i @protoruf/node` — native addon, full filesystem access.
+    `@protoruf/node` — native addon, full filesystem access. Install from
+    [GitHub Releases](https://github.com/EdwinAlkins/protoruf/releases) (npm coming soon).
 
     [Get started →](node/installation.md)
 
@@ -67,7 +68,8 @@ conversion logic is shared, never duplicated:
 
     ---
 
-    `npm i @protoruf/wasm` — runs entirely in the browser, sandboxed.
+    `@protoruf/wasm` — runs entirely in the browser, sandboxed. Install from
+    [GitHub Releases](https://github.com/EdwinAlkins/protoruf/releases) (npm coming soon).
 
     [Get started →](browser/installation.md)
 

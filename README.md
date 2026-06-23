@@ -13,8 +13,7 @@
   <a href="https://EdwinAlkins.github.io/protoruf/">📖 Documentation</a> •
   <a href="https://github.com/EdwinAlkins/protoruf">💻 Source</a> •
   <a href="https://pypi.org/project/protoruf/">📦 PyPI</a> •
-  <a href="https://www.npmjs.com/package/@protoruf/node">📦 npm (node)</a> •
-  <a href="https://www.npmjs.com/package/@protoruf/wasm">📦 npm (wasm)</a>
+  <a href="https://github.com/EdwinAlkins/protoruf/releases">📦 Releases (node &amp; wasm)</a>
 </p>
 
 ---
@@ -29,9 +28,15 @@ layer, so the conversion logic is shared, never duplicated:
 | Target | Package | Install | Docs |
 |---|---|---|---|
 | **Python** | [`protoruf`](https://pypi.org/project/protoruf/) | `pip install protoruf` | [Python guide](https://EdwinAlkins.github.io/protoruf/) |
-| **Node.js** | [`@protoruf/node`](https://www.npmjs.com/package/@protoruf/node) | `npm i @protoruf/node` | [Node guide](https://EdwinAlkins.github.io/protoruf/) |
-| **Browser (WASM)** | [`@protoruf/wasm`](https://www.npmjs.com/package/@protoruf/wasm) | `npm i @protoruf/wasm` | [Browser guide](https://EdwinAlkins.github.io/protoruf/) |
+| **Node.js** | `@protoruf/node` | [GitHub Releases](https://github.com/EdwinAlkins/protoruf/releases) by URL — npm coming soon | [Node guide](https://EdwinAlkins.github.io/protoruf/) |
+| **Browser (WASM)** | `@protoruf/wasm` | [GitHub Releases](https://github.com/EdwinAlkins/protoruf/releases) by URL — npm coming soon | [Browser guide](https://EdwinAlkins.github.io/protoruf/) |
 | **Rust** | `protoruf` core crate | — | [Rust guide](https://EdwinAlkins.github.io/protoruf/) |
+
+> **Node & browser install (v0.2.0):** the npm registry release is coming soon. For now, grab the prebuilt tarballs from the [Releases page](https://github.com/EdwinAlkins/protoruf/releases) and install by URL:
+> ```bash
+> npm install https://github.com/EdwinAlkins/protoruf/releases/download/v0.2.0/protoruf-node-0.2.0.tgz
+> npm install https://github.com/EdwinAlkins/protoruf/releases/download/v0.2.0/protoruf-wasm-0.2.0.tgz
+> ```
 
 ## Features
 

@@ -11,17 +11,22 @@ This guide covers installing the Node.js target of protoruf — a native addon b
 
 ## Install
 
+!!! note "v0.2.0 distribution"
+    The npm registry release is coming soon. For now, install the prebuilt package from the
+    [GitHub Releases page](https://github.com/EdwinAlkins/protoruf/releases) by URL:
+
 ```bash
-npm i @protoruf/node
-# or
-pnpm add @protoruf/node
-# or
-yarn add @protoruf/node
+npm install https://github.com/EdwinAlkins/protoruf/releases/download/v0.2.0/protoruf-node-0.2.0.tgz
 ```
 
-Pre-built binaries are published per platform as `optionalDependencies`
-(`@protoruf/node-linux-x64-gnu`, `-darwin-arm64`, `-win32-x64-msvc`, …) and npm installs only
-the one matching the host — no toolchain required to consume the package.
+The tarball is **self-contained**: it bundles the native binary for every supported platform
+(Linux x64/arm64, macOS x64/arm64, Windows x64), and the loader picks the one matching the host
+at runtime — no Rust toolchain, nothing else to resolve.
+
+!!! tip "Once on npm"
+    The registry release will install with the usual `npm i @protoruf/node` (per-platform
+    binaries shipped as `optionalDependencies`, only the matching one downloaded). The `import`
+    statements below are identical either way.
 
 ## Verify Installation
 

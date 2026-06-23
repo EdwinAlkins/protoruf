@@ -1,6 +1,6 @@
 {
   "name": "@protoruf/node",
-  "version": "0.1.5",
+  "version": "0.2.0",
   "description": "High-performance JSON <-> Protobuf conversion, powered by Rust (Node.js native addon)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -45,7 +45,10 @@
     "test:js": "vitest run",
     "artifacts": "napi artifacts",
     "prepublishOnly": "napi prepublish -t npm",
-    "version": "napi version"
+    "version": "napi version",
+    "prepare:wasm": "node scripts/prepare-npm-wasm.mjs dist/wasm-web",
+    "pack:wasm": "wasm-pack build --target web --out-dir dist/wasm-web --release -- --features wasm && npm run prepare:wasm",
+    "pack:github": "npm run build && npm run pack:wasm && node scripts/pack-github.mjs"
   },
   "devDependencies": {
     "@napi-rs/cli": "^2.18.4",

@@ -12,11 +12,17 @@ WASM sandbox — no filesystem, no network, no DOM access by default.
 
 ## Install
 
+!!! note "v0.2.0 distribution"
+    The npm registry release is coming soon. For now, install the prebuilt package from the
+    [GitHub Releases page](https://github.com/EdwinAlkins/protoruf/releases) by URL:
+
 ```bash
-npm i @protoruf/wasm
+npm install https://github.com/EdwinAlkins/protoruf/releases/download/v0.2.0/protoruf-wasm-0.2.0.tgz
 ```
 
-Works with bundlers and with native ESM (`<script type="module">`).
+The published package is the **`web`** target — it works with bundlers (Vite, webpack, …) and
+with native ESM (`<script type="module">`). Once on npm, this becomes `npm i @protoruf/wasm`; the
+code below is identical either way.
 
 ## Initialise
 

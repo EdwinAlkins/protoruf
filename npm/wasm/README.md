@@ -11,7 +11,7 @@
 <p align="center">
   <a href="https://EdwinAlkins.github.io/protoruf/">📖 Documentation</a> •
   <a href="https://github.com/EdwinAlkins/protoruf">💻 Source</a> •
-  <a href="https://www.npmjs.com/package/@protoruf/wasm">📦 npm</a>
+  <a href="https://github.com/EdwinAlkins/protoruf/releases">📦 Releases</a>
 </p>
 
 ---
@@ -21,16 +21,19 @@ WebAssembly build (wasm-bindgen) for converting between **JSON and Protobuf** dy
 Runs in a sandboxed WASM module, so even hostile input can't reach the filesystem or network.
 
 This is the browser target of [protoruf](https://github.com/EdwinAlkins/protoruf); the same
-Rust core also ships for [Python](https://pypi.org/project/protoruf/),
-[Node.js](https://www.npmjs.com/package/@protoruf/node) and Rust.
+Rust core also ships for [Python](https://pypi.org/project/protoruf/), Node.js and Rust.
 
 ## Install
 
+The npm registry release is coming soon. For now, install the prebuilt package from the
+[GitHub Releases page](https://github.com/EdwinAlkins/protoruf/releases) by URL:
+
 ```bash
-npm i @protoruf/wasm
+npm install https://github.com/EdwinAlkins/protoruf/releases/download/v0.2.0/protoruf-wasm-0.2.0.tgz
 ```
 
-Works with Vite, webpack and other bundlers, as well as native ESM (`<script type="module">`).
+The published package is the `web` target — works with Vite, webpack and other bundlers, as
+well as native ESM (`<script type="module">`).
 
 ## Usage
 
