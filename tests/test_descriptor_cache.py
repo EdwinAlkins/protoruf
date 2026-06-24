@@ -13,6 +13,8 @@ from protoruf import (
     protobuf_to_json,
 )
 
+from tests.test_models import Message
+
 PROTO_PATH = Path(__file__).parent / "proto" / "message.proto"
 DESC_PATH = Path(__file__).parent / "proto" / "message.desc"
 MESSAGE_TYPE = "message.Message"
@@ -120,3 +122,59 @@ def test_cache_invalid_json():
     cache = DescriptorCache(get_descriptor())
     with pytest.raises(ValueError):
         cache.json_to_protobuf("not valid json", MESSAGE_TYPE)
+
+
+def test_cache_pydantic_to_protobuf():
+    """A cache converts a Pydantic model to protobuf bytes."""
+    cache = DescriptorCache(get_descriptor())
+    msg = Message(
+        id="456",
+        content="Pydantic test",
+        priority=3,
+        tags=["pydantic"],
+        metadata={"author": "Bob", "created_at": 9876543210},
+    )
+
+    protobuf_bytes = cache.pydantic_to_protobuf(msg, MESSAGE_TYPE)
+    assert isinstance(protobuf_bytes, bytes)
+    assert len(protobuf_bytes) > 0
+
+    result = json.loads(cache.protobuf_to_json(protobuf_bytes, MESSAGE_TYPE))
+    assert result["id"] == "456"
+    assert result["content"] == "Pydantic test"
+    assert result["priority"] == 3
+    assert result["tags"] == ["pydantic"]
+    assert result["metadata"]["author"] == "Bob"
+    assert result["metadata"]["created_at"] == 9876543210
+
+
+def test_cache_protobuf_to_pydantic():
+    """A cache converts protobuf bytes back into a Pydantic model instance."""
+    cache = DescriptorCache(get_descriptor())
+    msg = Message(
+        id="456",
+        content="Pydantic test",
+        priority=3,
+        tags=["pydantic"],
+        metadata={"author": "Bob", "created_at": 9876543210},
+    )
+    protobuf_bytes = cache.pydantic_to_protobuf(msg, MESSAGE_TYPE)
+
+    result = cache.protobuf_to_pydantic(protobuf_bytes, Message, MESSAGE_TYPE)
+    assert isinstance(result, Message)
+    assert result.id == "456"
+    assert result.content == "Pydantic test"
+    assert result.priority == 3
+    assert result.tags == ["pydantic"]
+    assert result.metadata.author == "Bob"
+    assert result.metadata.created_at == 9876543210
+
+
+def test_cache_pydantic_roundtrip():
+    """A Pydantic model survives a full round-trip through the cache."""
+    cache = DescriptorCache(get_descriptor())
+    msg = Message(**SAMPLE)
+
+    protobuf_bytes = cache.pydantic_to_protobuf(msg, MESSAGE_TYPE)
+    result = cache.protobuf_to_pydantic(protobuf_bytes, Message, MESSAGE_TYPE)
+    assert result == msg

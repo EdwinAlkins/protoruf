@@ -2,7 +2,7 @@
 from typing import Type, TypeVar
 
 from . import _protoruf
-from .compiler import compile_proto, load_descriptor
+from .compiler import compile_proto, load_descriptor, compile_proto_from_sources
 
 from pydantic import BaseModel
 
@@ -14,14 +14,57 @@ __all__ = [
     "protobuf_to_json",
     "compile_proto",
     "load_descriptor",
+    "compile_proto_from_sources",
     "protobuf_to_pydantic",
+    "pydantic_to_protobuf",
     "DescriptorCache",
 ]
-__version__ = "0.1.5"
+__version__ = "0.2.0"
 
-# Pre-decoded descriptor pool. Build it once and reuse it across conversions to
-# avoid re-decoding the descriptor set on every call (the dominant cost).
-DescriptorCache = _protoruf.DescriptorCache
+class DescriptorCache:
+    """Pre-decoded descriptor pool.
+
+    Build it once and reuse it across conversions to avoid re-decoding the
+    descriptor set on every call (the dominant cost). Wraps the native Rust
+    cache and adds Pydantic helpers, which are pure-Python (de)serialization on
+    top of the JSON conversions.
+    """
+
+    def __init__(self, descriptor_bytes: bytes) -> None:
+        self._cache = _protoruf.DescriptorCache(descriptor_bytes)
+
+    def json_to_protobuf(self, json_str: str, message_type: str) -> bytes:
+        """Convert a JSON string to a Protobuf message (bytes)."""
+        return self._cache.json_to_protobuf(json_str, message_type)
+
+    def protobuf_to_json(
+        self,
+        protobuf_bytes: bytes,
+        message_type: str,
+        pretty: bool = False,
+    ) -> str:
+        """Convert a Protobuf message (bytes) to a JSON string."""
+        return self._cache.protobuf_to_json(protobuf_bytes, message_type, pretty)
+
+    def pydantic_to_protobuf(
+        self,
+        pydantic_model: BaseModel,
+        message_type: str,
+    ) -> bytes:
+        """Convert a Pydantic model to a Protobuf message (bytes)."""
+        return self._cache.json_to_protobuf(
+            pydantic_model.model_dump_json(), message_type
+        )
+
+    def protobuf_to_pydantic(
+        self,
+        protobuf_bytes: bytes,
+        model_class: Type[T],
+        message_type: str,
+    ) -> T:
+        """Convert a Protobuf message (bytes) to a Pydantic model instance."""
+        json_str = self._cache.protobuf_to_json(protobuf_bytes, message_type, False)
+        return model_class.model_validate_json(json_str)
 
 
 def json_to_protobuf(
@@ -72,8 +115,8 @@ def pydantic_to_protobuf(
 def protobuf_to_json(
     protobuf_bytes: bytes,
     descriptor_bytes: bytes,
+    message_type: str,
     pretty: bool = False,
-    message_type: str = None,  # type: ignore[assignment]
 ) -> str:
     """
     Convert a Protobuf message to a JSON string.
@@ -81,8 +124,8 @@ def protobuf_to_json(
     Args:
         protobuf_bytes: Protobuf message as bytes
         descriptor_bytes: Compiled protobuf descriptor set (from compile_proto or load_descriptor)
-        pretty: If True, format JSON with indentation
         message_type: Full message type name (e.g., "user.User", "ecommerce.Order")
+        pretty: If True, format JSON with indentation (default: False)
 
     Returns:
         JSON string representation
@@ -91,7 +134,7 @@ def protobuf_to_json(
         RuntimeError: If decoding or JSON serialization fails
     """
     return _protoruf.protobuf_to_json(
-        protobuf_bytes, descriptor_bytes, pretty, message_type
+        protobuf_bytes, descriptor_bytes, message_type, pretty=pretty
     )
 
 
@@ -113,5 +156,5 @@ def protobuf_to_pydantic(
     Returns:
         An instance of the Pydantic model class provided (model_class)
     """
-    json_str = protobuf_to_json(protobuf_bytes, descriptor_bytes, False, message_type)
+    json_str = protobuf_to_json(protobuf_bytes, descriptor_bytes, message_type, pretty=False)
     return model_class.model_validate_json(json_str)

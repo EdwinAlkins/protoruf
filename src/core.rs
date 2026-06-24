@@ -1,9 +1,13 @@
 //! Core logic for JSON/Protobuf conversion (pure Rust, no Python dependencies)
 
+use crate::pool_cache;
 use prost::Message;
 use prost_reflect::{
     DescriptorPool, DeserializeOptions, DynamicMessage, MessageDescriptor, SerializeOptions,
 };
+use protox::file::{ChainFileResolver, File, FileResolver, GoogleFileResolver};
+use protox::{Compiler, Error as ProtoxError};
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 /// Serialization options matching protoruf's historical JSON shape:
@@ -17,7 +21,15 @@ fn serialize_options() -> SerializeOptions {
 }
 
 /// Compile a .proto file to a descriptor set (bytes)
-pub fn compile_proto(proto_path: &str, include_paths: Option<Vec<String>>) -> Result<Vec<u8>, String> {
+///
+/// Reads the filesystem, so it is only wired up by the Python and Node bindings;
+/// the WASM target deliberately omits it (use [`compile_proto_from_sources`]).
+/// Allow it to be unused in wasm-only builds without a warning.
+#[cfg_attr(not(any(feature = "python", feature = "node", test)), allow(dead_code))]
+pub fn compile_proto(
+    proto_path: &str,
+    include_paths: Option<Vec<String>>,
+) -> Result<Vec<u8>, String> {
     let proto_path = PathBuf::from(proto_path);
 
     // Determine include paths
@@ -32,7 +44,7 @@ pub fn compile_proto(proto_path: &str, include_paths: Option<Vec<String>>) -> Re
     let include_paths_ref: Vec<&str> = include_paths.iter().map(|s| s.as_str()).collect();
 
     // Compile using protox
-    let file_descriptor_set = protox::compile(&[&proto_path], &include_paths_ref)
+    let file_descriptor_set = protox::compile([&proto_path], &include_paths_ref)
         .map_err(|e| format!("Failed to compile proto file: {}", e))?;
 
     // Serialize to bytes
@@ -42,6 +54,53 @@ pub fn compile_proto(proto_path: &str, include_paths: Option<Vec<String>>) -> Re
         .map_err(|e| format!("Failed to encode descriptor set: {}", e))?;
 
     Ok(descriptor_bytes)
+}
+
+/// A [`FileResolver`] that serves `.proto` sources held in memory (name -> source).
+///
+/// This is what makes compilation work without any filesystem access (e.g. in a
+/// browser/WASM context): `import` statements between protos are resolved by name
+/// against this map.
+struct InMemoryResolver {
+    files: HashMap<String, String>,
+}
+
+impl FileResolver for InMemoryResolver {
+    fn open_file(&self, name: &str) -> Result<File, ProtoxError> {
+        match self.files.get(name) {
+            Some(source) => File::from_source(name, source),
+            None => Err(ProtoxError::file_not_found(name)),
+        }
+    }
+}
+
+/// Compile a set of `.proto` files provided in memory into a descriptor set (bytes).
+///
+/// `files` maps each file's logical name (e.g. `"user.proto"`, `"common/types.proto"`)
+/// to its source text. `root` is the entry file to compile (must be a key of `files`).
+///
+/// Unlike [`compile_proto`], this performs **no filesystem access**, so it works in
+/// sandboxed targets such as WASM/the browser. Google well-known types
+/// (`google/protobuf/*.proto`) are still resolved automatically. The resulting bytes
+/// are identical to what [`compile_proto`] would produce for the same sources.
+pub fn compile_proto_from_sources(
+    files: HashMap<String, String>,
+    root: &str,
+    include_imports: bool,
+) -> Result<Vec<u8>, String> {
+    let mut resolver = ChainFileResolver::new();
+    resolver.add(InMemoryResolver { files }); // user-provided protos take priority
+    resolver.add(GoogleFileResolver::new()); // embedded well-known types
+
+    let mut compiler = Compiler::with_file_resolver(resolver);
+    // When true, transitively-imported files (and well-known types) are embedded so
+    // the descriptor set is self-contained. When false, the output is smaller and
+    // decodes faster for callers that do not need Google well-known types.
+    compiler.include_imports(include_imports);
+    compiler
+        .open_file(root)
+        .map_err(|e| format!("Failed to compile proto file: {}", e))?;
+    Ok(compiler.encode_file_descriptor_set())
 }
 
 /// Decode a serialized `FileDescriptorSet` into a reusable [`DescriptorPool`].
@@ -58,21 +117,20 @@ pub fn get_message_descriptor(
     pool: &DescriptorPool,
     message_type: &str,
 ) -> Result<MessageDescriptor, String> {
-    pool.get_message_by_name(message_type).ok_or_else(|| {
-        format!("Message type '{}' not found in descriptor", message_type)
-    })
+    pool.get_message_by_name(message_type)
+        .ok_or_else(|| format!("Message type '{}' not found in descriptor", message_type))
 }
 
-/// Convert a JSON string to Protobuf bytes using an already-resolved descriptor.
-pub fn json_to_protobuf_bytes_with_descriptor(
+/// Convert a JSON string to Protobuf bytes using an owned message descriptor.
+pub fn json_to_protobuf_bytes_with_descriptor_owned(
     json_str: &str,
-    message_descriptor: &MessageDescriptor,
+    message_descriptor: MessageDescriptor,
 ) -> Result<Vec<u8>, String> {
     // Deserialize JSON straight into a DynamicMessage using prost-reflect's
     // proto3 JSON mapping (no intermediate serde_json::Value tree).
     let mut deserializer = serde_json::Deserializer::from_str(json_str);
     let dynamic_message = DynamicMessage::deserialize_with_options(
-        message_descriptor.clone(),
+        message_descriptor,
         &mut deserializer,
         &DeserializeOptions::new(),
     )
@@ -90,17 +148,23 @@ pub fn json_to_protobuf_bytes_with_descriptor(
     Ok(buf)
 }
 
-/// Convert Protobuf bytes to a JSON string using an already-resolved descriptor.
-pub fn protobuf_to_json_string_with_descriptor(
-    protobuf_bytes: &[u8],
+/// Convert a JSON string to Protobuf bytes using an already-resolved descriptor.
+pub fn json_to_protobuf_bytes_with_descriptor(
+    json_str: &str,
     message_descriptor: &MessageDescriptor,
+) -> Result<Vec<u8>, String> {
+    json_to_protobuf_bytes_with_descriptor_owned(json_str, message_descriptor.clone())
+}
+
+/// Convert Protobuf bytes to a JSON string using an owned message descriptor.
+pub fn protobuf_to_json_string_with_descriptor_owned(
+    protobuf_bytes: &[u8],
+    message_descriptor: MessageDescriptor,
     pretty: bool,
 ) -> Result<String, String> {
-    // Decode bytes to DynamicMessage
-    let dynamic_message = DynamicMessage::decode(message_descriptor.clone(), protobuf_bytes)
+    let dynamic_message = DynamicMessage::decode(message_descriptor, protobuf_bytes)
         .map_err(|e| format!("Decoding error: {}", e))?;
 
-    // Serialize directly with prost-reflect (no intermediate serde_json::Value tree).
     let options = serialize_options();
     // Pre-allocate: JSON is typically a few times larger than the protobuf wire
     // format, so this avoids repeated reallocations as the buffer grows.
@@ -120,7 +184,21 @@ pub fn protobuf_to_json_string_with_descriptor(
         serializer.into_inner()
     };
 
-    String::from_utf8(bytes).map_err(|e| format!("JSON serialization error: {}", e))
+    // SAFETY: `serde_json::Serializer` only emits valid UTF-8.
+    Ok(unsafe { String::from_utf8_unchecked(bytes) })
+}
+
+/// Convert Protobuf bytes to a JSON string using an already-resolved descriptor.
+pub fn protobuf_to_json_string_with_descriptor(
+    protobuf_bytes: &[u8],
+    message_descriptor: &MessageDescriptor,
+    pretty: bool,
+) -> Result<String, String> {
+    protobuf_to_json_string_with_descriptor_owned(
+        protobuf_bytes,
+        message_descriptor.clone(),
+        pretty,
+    )
 }
 
 /// Convert a JSON string to a Protobuf message (bytes)
@@ -129,21 +207,21 @@ pub fn json_to_protobuf_bytes(
     descriptor_bytes: &[u8],
     message_type: &str,
 ) -> Result<Vec<u8>, String> {
-    let pool = load_descriptor_pool(descriptor_bytes)?;
+    let pool = pool_cache::load_descriptor_pool_cached(descriptor_bytes)?;
     let message_descriptor = get_message_descriptor(&pool, message_type)?;
-    json_to_protobuf_bytes_with_descriptor(json_str, &message_descriptor)
+    json_to_protobuf_bytes_with_descriptor_owned(json_str, message_descriptor)
 }
 
 /// Convert a Protobuf message (bytes) to a JSON string
 pub fn protobuf_to_json_string(
     protobuf_bytes: &[u8],
     descriptor_bytes: &[u8],
-    pretty: bool,
     message_type: &str,
+    pretty: bool,
 ) -> Result<String, String> {
-    let pool = load_descriptor_pool(descriptor_bytes)?;
+    let pool = pool_cache::load_descriptor_pool_cached(descriptor_bytes)?;
     let message_descriptor = get_message_descriptor(&pool, message_type)?;
-    protobuf_to_json_string_with_descriptor(protobuf_bytes, &message_descriptor, pretty)
+    protobuf_to_json_string_with_descriptor_owned(protobuf_bytes, message_descriptor, pretty)
 }
 
 #[cfg(test)]
@@ -152,8 +230,8 @@ mod tests {
     use serde_json::Value as JsonValue;
 
     fn get_test_descriptor() -> Vec<u8> {
-        let proto_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("tests/proto/message.proto");
+        let proto_path =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/proto/message.proto");
         compile_proto(proto_path.to_str().unwrap(), None).unwrap()
     }
 
@@ -181,11 +259,14 @@ mod tests {
         }"#;
 
         // JSON -> Protobuf
-        let protobuf_bytes = json_to_protobuf_bytes(json_input, &descriptor, "message.Message").unwrap();
+        let protobuf_bytes =
+            json_to_protobuf_bytes(json_input, &descriptor, "message.Message").unwrap();
         assert!(!protobuf_bytes.is_empty());
 
         // Protobuf -> JSON
-        let json_output = protobuf_to_json_string(&protobuf_bytes, &descriptor, false, "message.Message").unwrap();
+        let json_output =
+            protobuf_to_json_string(&protobuf_bytes, &descriptor, "message.Message", false)
+                .unwrap();
 
         // Verify roundtrip
         let result: JsonValue = serde_json::from_str(&json_output).unwrap();
@@ -213,7 +294,8 @@ mod tests {
         let protobuf_bytes =
             json_to_protobuf_bytes(json_input, &descriptor, "message.Message").unwrap();
         let json_output =
-            protobuf_to_json_string(&protobuf_bytes, &descriptor, false, "message.Message").unwrap();
+            protobuf_to_json_string(&protobuf_bytes, &descriptor, "message.Message", false)
+                .unwrap();
 
         let result: JsonValue = serde_json::from_str(&json_output).unwrap();
         let attrs = &result["metadata"]["attributes"];
@@ -227,7 +309,8 @@ mod tests {
         let descriptor = get_test_descriptor();
         let json_input = r#"{"id": "1", "content": "Simple"}"#;
 
-        let protobuf_bytes = json_to_protobuf_bytes(json_input, &descriptor, "message.Message").unwrap();
+        let protobuf_bytes =
+            json_to_protobuf_bytes(json_input, &descriptor, "message.Message").unwrap();
         assert!(!protobuf_bytes.is_empty());
     }
 
@@ -236,8 +319,10 @@ mod tests {
         let descriptor = get_test_descriptor();
         let json_input = r#"{"id": "1", "content": "Pretty test"}"#;
 
-        let protobuf_bytes = json_to_protobuf_bytes(json_input, &descriptor, "message.Message").unwrap();
-        let pretty_json = protobuf_to_json_string(&protobuf_bytes, &descriptor, true, "message.Message").unwrap();
+        let protobuf_bytes =
+            json_to_protobuf_bytes(json_input, &descriptor, "message.Message").unwrap();
+        let pretty_json =
+            protobuf_to_json_string(&protobuf_bytes, &descriptor, "message.Message", true).unwrap();
 
         // Pretty JSON should contain newlines
         assert!(pretty_json.contains('\n'));
@@ -289,8 +374,10 @@ mod tests {
             }
         }"#;
 
-        let protobuf_bytes = json_to_protobuf_bytes(json_input, &descriptor, "message.Message").unwrap();
-        let json_output = protobuf_to_json_string(&protobuf_bytes, &descriptor, true, "message.Message").unwrap();
+        let protobuf_bytes =
+            json_to_protobuf_bytes(json_input, &descriptor, "message.Message").unwrap();
+        let json_output =
+            protobuf_to_json_string(&protobuf_bytes, &descriptor, "message.Message", true).unwrap();
 
         let result: JsonValue = serde_json::from_str(&json_output).unwrap();
         assert_eq!(result["id"], "full-test");
@@ -304,8 +391,11 @@ mod tests {
         let descriptor = get_test_descriptor();
         let json_input = r#"{"id": "minimal"}"#;
 
-        let protobuf_bytes = json_to_protobuf_bytes(json_input, &descriptor, "message.Message").unwrap();
-        let json_output = protobuf_to_json_string(&protobuf_bytes, &descriptor, false, "message.Message").unwrap();
+        let protobuf_bytes =
+            json_to_protobuf_bytes(json_input, &descriptor, "message.Message").unwrap();
+        let json_output =
+            protobuf_to_json_string(&protobuf_bytes, &descriptor, "message.Message", false)
+                .unwrap();
 
         let result: JsonValue = serde_json::from_str(&json_output).unwrap();
         assert_eq!(result["id"], "minimal");
@@ -399,7 +489,7 @@ mod tests {
 
         let json_desc = protobuf_to_json_string_with_descriptor(&from_desc, &desc, false).unwrap();
         let json_bytes =
-            protobuf_to_json_string(&from_bytes, &descriptor, false, "message.Message").unwrap();
+            protobuf_to_json_string(&from_bytes, &descriptor, "message.Message", false).unwrap();
         assert_eq!(json_desc, json_bytes);
     }
 
@@ -410,5 +500,88 @@ mod tests {
         let desc = get_message_descriptor(&pool, "message.Message").unwrap();
 
         assert!(json_to_protobuf_bytes_with_descriptor("not valid json", &desc).is_err());
+    }
+
+    // --- Tests for in-memory compilation (backing the WASM target) ---
+
+    #[test]
+    fn test_compile_from_sources_single_file() {
+        let proto = r#"syntax = "proto3"; package user; message User { string id = 1; repeated string tags = 2; }"#;
+        let files = HashMap::from([("user.proto".to_string(), proto.to_string())]);
+
+        let descriptor = compile_proto_from_sources(files, "user.proto", true).unwrap();
+        assert!(!descriptor.is_empty());
+
+        // The descriptor must be usable for a normal round-trip.
+        let pb =
+            json_to_protobuf_bytes(r#"{"id":"123","tags":["a","b"]}"#, &descriptor, "user.User")
+                .unwrap();
+        let json = protobuf_to_json_string(&pb, &descriptor, "user.User", false).unwrap();
+        let result: JsonValue = serde_json::from_str(&json).unwrap();
+        assert_eq!(result["id"], "123");
+        assert_eq!(result["tags"], serde_json::json!(["a", "b"]));
+    }
+
+    #[test]
+    fn test_compile_from_sources_with_import() {
+        // Two in-memory files, one importing the other (resolved by name, no FS).
+        let common = r#"syntax = "proto3"; package common; message Id { string value = 1; }"#;
+        let root = r#"syntax = "proto3"; package user; import "common.proto"; message User { common.Id id = 1; }"#;
+        let files = HashMap::from([
+            ("common.proto".to_string(), common.to_string()),
+            ("user.proto".to_string(), root.to_string()),
+        ]);
+
+        let descriptor = compile_proto_from_sources(files, "user.proto", true).unwrap();
+        let pb =
+            json_to_protobuf_bytes(r#"{"id":{"value":"x"}}"#, &descriptor, "user.User").unwrap();
+        let json = protobuf_to_json_string(&pb, &descriptor, "user.User", false).unwrap();
+        let result: JsonValue = serde_json::from_str(&json).unwrap();
+        assert_eq!(result["id"]["value"], "x");
+    }
+
+    #[test]
+    fn test_compile_from_sources_with_google_wellknown() {
+        // google/protobuf/* imports must resolve from the embedded GoogleFileResolver.
+        let root = r#"syntax = "proto3"; package ev; import "google/protobuf/timestamp.proto"; message Event { google.protobuf.Timestamp at = 1; }"#;
+        let files = HashMap::from([("ev.proto".to_string(), root.to_string())]);
+
+        let descriptor = compile_proto_from_sources(files, "ev.proto", true).unwrap();
+        assert!(!descriptor.is_empty());
+        let pool = load_descriptor_pool(&descriptor).unwrap();
+        assert!(get_message_descriptor(&pool, "ev.Event").is_ok());
+    }
+
+    #[test]
+    fn test_compile_from_sources_matches_compile_proto() {
+        // In-memory compilation must produce a descriptor equivalent to the FS-based one.
+        let proto_path =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/proto/message.proto");
+        let source = std::fs::read_to_string(&proto_path).unwrap();
+        let files = HashMap::from([("message.proto".to_string(), source)]);
+
+        let from_sources = compile_proto_from_sources(files, "message.proto", true).unwrap();
+
+        // Both descriptors must resolve the same message and round-trip identically.
+        let json_input = r#"{"id":"1","content":"hi"}"#;
+        let a = json_to_protobuf_bytes(json_input, &from_sources, "message.Message").unwrap();
+        let b =
+            json_to_protobuf_bytes(json_input, &get_test_descriptor(), "message.Message").unwrap();
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn test_compile_from_sources_missing_root() {
+        let files = HashMap::new();
+        assert!(compile_proto_from_sources(files, "nope.proto", true).is_err());
+    }
+
+    #[test]
+    fn test_compile_from_sources_invalid_syntax() {
+        let files = HashMap::from([(
+            "bad.proto".to_string(),
+            "this is not valid proto".to_string(),
+        )]);
+        assert!(compile_proto_from_sources(files, "bad.proto", true).is_err());
     }
 }

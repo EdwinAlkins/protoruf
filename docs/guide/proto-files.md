@@ -24,6 +24,106 @@ compile_proto(
 
 Compiled descriptor set as `bytes`.
 
+## Compiling From In-Memory Sources
+
+When your `.proto` definitions are not stored on disk — generated at runtime,
+received over the network, or kept in a database — use
+`compile_proto_from_sources()`. It compiles entirely from memory and never touches
+the filesystem.
+
+```python
+compile_proto_from_sources(
+    files: dict[str, str],
+    root: str,
+    include_imports: bool = True,
+    output_path: str | Path | None = None,
+) -> bytes
+```
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `files` | `dict[str, str]` | Yes | Mapping of file name → `.proto` source text |
+| `root` | `str` | Yes | Entry file to compile (must be a key of `files`) |
+| `include_imports` | `bool` | No | Embed imported files in the descriptor (default `True`) |
+| `output_path` | `str \| Path` | No | Save the descriptor to a file |
+
+### Returns
+
+Compiled descriptor set as `bytes`. The output is identical to what
+`compile_proto()` produces for the same sources.
+
+### Basic Example
+
+```python
+from protoruf import compile_proto_from_sources
+
+files = {
+    "user.proto": """
+syntax = "proto3";
+package user;
+message User { string id = 1; string email = 2; }
+""",
+}
+
+descriptor = compile_proto_from_sources(files, root="user.proto")
+```
+
+### Imports Between In-Memory Files
+
+`import` statements are resolved by name against the keys of the `files` mapping,
+so multi-file schemas work without any include paths:
+
+```python
+files = {
+    "common/types.proto": """
+syntax = "proto3";
+package common;
+message Timestamp { int64 seconds = 1; }
+""",
+    "api/service.proto": """
+syntax = "proto3";
+package api;
+import "common/types.proto";
+message Request {
+  common.Timestamp timestamp = 1;
+  string endpoint = 2;
+}
+""",
+}
+
+descriptor = compile_proto_from_sources(files, root="api/service.proto")
+```
+
+!!! note "Well-known types"
+    Google well-known types (`google/protobuf/*.proto`, e.g. `Timestamp`,
+    `Struct`, `Any`) are resolved automatically — you don't need to add them to
+    `files`.
+
+### The `include_imports` Option
+
+When `True` (the default), every transitively-imported file — including Google
+well-known types — is embedded in the descriptor, making it fully self-contained.
+Set it to `False` for a smaller descriptor that decodes faster, when the consumer
+does not need the embedded imports:
+
+```python
+descriptor = compile_proto_from_sources(
+    files,
+    root="api/service.proto",
+    include_imports=False,
+)
+```
+
+### Saving the Descriptor
+
+Like `compile_proto()`, you can write the result straight to a file:
+
+```python
+compile_proto_from_sources(files, root="user.proto", output_path="user.desc")
+```
+
 ## Basic Compilation
 
 The simplest usage compiles a single `.proto` file:

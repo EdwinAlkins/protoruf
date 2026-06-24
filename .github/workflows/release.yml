@@ -1,0 +1,129 @@
+name: Release (GitHub assets)
+
+# On a version tag (e.g. `git tag v0.2.0 && git push --tags`), build the native
+# addon for every platform + the WebAssembly package, bundle them into two
+# self-contained tarballs (no npm registry needed), and attach them to the
+# GitHub Release. Users install by URL:
+#   npm install https://github.com/EdwinAlkins/protoruf/releases/download/v0.2.0/protoruf-node-0.2.0.tgz
+#   npm install https://github.com/EdwinAlkins/protoruf/releases/download/v0.2.0/protoruf-wasm-0.2.0.tgz
+#
+# Run it manually (workflow_dispatch) to produce the tarballs as workflow
+# artifacts without touching any Release.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write # create/edit the GitHub Release
+
+jobs:
+  # Build one native binary per platform.
+  build-node:
+    name: Build node addon (${{ matrix.settings.target }})
+    runs-on: ${{ matrix.settings.host }}
+    strategy:
+      fail-fast: false
+      matrix:
+        settings:
+          - host: macos-latest
+            target: x86_64-apple-darwin
+          - host: macos-latest
+            target: aarch64-apple-darwin
+          - host: windows-latest
+            target: x86_64-pc-windows-msvc
+          - host: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - host: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            zig: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.settings.target }}
+      - name: Setup zig (cross-compile aarch64 linux)
+        if: ${{ matrix.settings.zig }}
+        uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.13.0
+      - name: Install dependencies
+        run: npm ci
+      - name: Build
+        shell: bash
+        run: |
+          npx napi build dist \
+            --platform --release --features node --dts index.d.ts \
+            --target ${{ matrix.settings.target }} \
+            ${{ matrix.settings.zig && '--zig' || '' }}
+      - name: Upload native binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: bindings-${{ matrix.settings.target }}
+          path: dist/*.node
+          if-no-files-found: error
+      # The JS loader + type defs are identical across platforms; ship them once.
+      - name: Upload JS binding
+        if: ${{ matrix.settings.target == 'x86_64-unknown-linux-gnu' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: js-binding
+          path: |
+            dist/index.js
+            dist/index.d.ts
+          if-no-files-found: error
+
+  # Gather every binary, build the WASM package, pack the two tarballs, and
+  # attach them to the Release.
+  release:
+    name: Pack tarballs & attach to release
+    needs: build-node
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - name: Install wasm-pack
+        uses: jetli/wasm-pack-action@v0.4.0
+      - name: Install dependencies
+        run: npm ci
+      - name: Restore JS binding
+        uses: actions/download-artifact@v4
+        with:
+          name: js-binding
+          path: dist
+      - name: Restore native binaries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: bindings-*
+          merge-multiple: true
+          path: dist
+      - name: Build the WASM package
+        run: npm run pack:wasm
+      - name: Pack the two tarballs
+        run: node scripts/pack-github.mjs
+      # Always expose the tarballs as workflow artifacts (handy for dispatch runs).
+      - name: Upload tarballs as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-tarballs
+          path: release/*.tgz
+          if-no-files-found: error
+      # On a tag, attach them to the matching GitHub Release (creating it if needed).
+      - name: Attach tarballs to the GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" release/*.tgz \
+            --title "${{ github.ref_name }}" \
+            --notes "Prebuilt packages — install by URL (see the README)." \
+          || gh release upload "${{ github.ref_name }}" release/*.tgz --clobber

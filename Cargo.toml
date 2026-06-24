@@ -1,6 +1,6 @@
 [package]
 name = "protoruf"
-version = "0.1.5"
+version = "0.2.0"
 edition = "2024"
 
 [lib]
@@ -8,17 +8,62 @@ name = "protoruf"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-pyo3 = { version = "0.28", features = ["extension-module"] }
 parking_lot = "0.12"
 prost = "0.13"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 prost-reflect = { version = "0.14", features = ["serde"] }
-prost-build = "0.13"
 protox = "0.7"
+lru = "0.12"
+
+# --- Binding-specific dependencies (each gated behind its own feature) ---
+# pyo3 is now OPTIONAL: it is only compiled when the `python` feature is on
+# (maturin enables it). This lets the `node`/`wasm` builds avoid pulling PyO3,
+# whose `extension-module` setting is incompatible with non-Python linking.
+pyo3 = { version = "0.28", optional = true }
+
+# Node.js native addon (napi-rs) — enabled by the `node` feature.
+napi = { version = "2", optional = true, features = ["napi8"] }
+napi-derive = { version = "2", optional = true }
+
+# WebAssembly / browser (wasm-bindgen) — enabled by the `wasm` feature.
+wasm-bindgen = { version = "0.2", optional = true }
+serde-wasm-bindgen = { version = "0.6", optional = true }
 
 [features]
-extension-module = ["pyo3/extension-module"]
+default = []
+# Build the Python extension module. Used by maturin (`--features python`).
+# Keeps the exact same PyO3 `extension-module` behaviour as before.
+python = ["dep:pyo3", "pyo3/extension-module"]
+# Build the Node.js native addon. Used by `@napi-rs/cli`.
+node = ["dep:napi", "dep:napi-derive"]
+# Build the WebAssembly module. Used by `wasm-pack`.
+wasm = ["dep:wasm-bindgen", "dep:serde-wasm-bindgen"]
+
+# napi-rs needs a small build-time setup to emit a loadable `.node` (symbol
+# export on macOS/Windows). It is compiled for every build but only *runs* for
+# the `node` feature (see build.rs), so Python/WASM/default builds are unaffected.
+[build-dependencies]
+napi-build = "2"
+
+[dev-dependencies]
+criterion = "0.7"
+
+[[bench]]
+name = "conversion"
+harness = false
+
+[profile.release]
+strip = "symbols"
+
+# wasm-pack runs wasm-opt on release builds by default. Rust's wasm32 output uses
+# bulk-memory and nontrapping float-to-int ops; without these flags binaryen's
+# validator rejects the module (memory.copy / i64.trunc_sat_f64_*).
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ["-Oz", "--enable-bulk-memory", "--enable-nontrapping-float-to-int"]
+
+[package.metadata.wasm-pack.profile.dev]
+wasm-opt = false
 
 # Heavy optimization (full LTO + a single codegen unit) is very expensive at
 # compile time and would slow down every local rebuild (uv sync / maturin

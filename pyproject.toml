@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "protoruf"
-version = "0.1.5"
+version = "0.2.0"
 description = "A Python library written in Rust for JSON/Protobuf conversion"
 readme = "PYPI_README.md"
 requires-python = ">=3.12"
@@ -20,10 +20,10 @@ Repository = "https://github.com/EdwinAlkins/protoruf"
 
 [dependency-groups]
 dev = [
+    "maturin>=1.14.1",
+    "mypy>=2.1.0",
     "pytest>=9.1.0",
     "pytest-asyncio>=1.4.0",
-    "maturin>=1.14.0",
-    "mypy>=2.1.0",
     "twine>=6.2.0",
 ]
 benchmark = [
@@ -36,6 +36,6 @@ docs = [
 ]
 
 [tool.maturin]
-features = ["pyo3/extension-module"]
+features = ["python"]
 python-source = "python"
 module-name = "protoruf._protoruf"

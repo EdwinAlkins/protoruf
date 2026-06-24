@@ -1,0 +1,32 @@
+name: Python tests
+
+# Build the Rust extension module with maturin and run the pytest suite.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: pytest (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies (dev group)
+        run: uv sync --group dev
+      - name: Build & install the extension module
+        run: uv run maturin develop
+      - name: Run pytest
+        run: uv run pytest
+      - name: Run mypy
+        run: uv run mypy python/protoruf/ --ignore-missing-imports
