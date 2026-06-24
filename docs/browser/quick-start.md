@@ -45,7 +45,7 @@ const wire = jsonToProtobuf(json, descriptor, "message.Message"); // Uint8Array
 ```ts
 import { protobufToJson } from "@protoruf/wasm";
 
-const out = protobufToJson(wire, descriptor, /* pretty */ true, "message.Message");
+const out = protobufToJson(wire, descriptor, "message.Message", /* pretty */ true);
 console.log(out);
 ```
 
@@ -72,7 +72,7 @@ const descriptor = compileProtoFromSources(
 );
 
 const wire = jsonToProtobuf('{"id":"123"}', descriptor, "message.Message");
-console.log(protobufToJson(wire, descriptor, true, "message.Message"));
+console.log(protobufToJson(wire, descriptor, "message.Message", true));
 ```
 
 !!! tip "Fixed schemas? Skip compilation"

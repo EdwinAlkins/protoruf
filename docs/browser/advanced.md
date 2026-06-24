@@ -92,7 +92,7 @@ export function protobufToObject<T>(
   schema: z.ZodType<T>,
   messageType: string,
 ): T {
-  return schema.parse(JSON.parse(protobufToJson(bytes, descriptor, false, messageType)));
+  return schema.parse(JSON.parse(protobufToJson(bytes, descriptor, messageType, false)));
 }
 ```
 

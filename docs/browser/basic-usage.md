@@ -39,7 +39,7 @@ const wire = jsonToProtobuf('{"id":"123","name":"Alice"}', descriptor, "user.Use
 ## Protobuf → JSON
 
 ```ts
-const json = protobufToJson(wire, descriptor, /* pretty */ true, "user.User");
+const json = protobufToJson(wire, descriptor, "user.User", /* pretty */ true);
 ```
 
 - `protobufBytes: Uint8Array`, `descriptorBytes: Uint8Array`, `pretty: boolean`, `messageType: string`
@@ -80,7 +80,7 @@ message Task { string title = 1; Priority priority = 2; }
 
 ```ts
 jsonToProtobuf('{"title":"x","priority":"HIGH"}', d, "Task"); // name in
-JSON.parse(protobufToJson(wire, d, false, "Task")).priority;  // 2 (number out)
+JSON.parse(protobufToJson(wire, d, "Task", false)).priority;  // 2 (number out)
 ```
 
 ### Repeated fields & maps

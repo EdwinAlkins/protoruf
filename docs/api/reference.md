@@ -191,8 +191,8 @@ Convert a Protobuf message to a JSON string.
 def protobuf_to_json(
     protobuf_bytes: bytes,
     descriptor_bytes: bytes,
+    message_type: str,
     pretty: bool = False,
-    message_type: str = None,
 ) -> str
 ```
 
@@ -202,8 +202,8 @@ def protobuf_to_json(
 |-----------|------|----------|-------------|
 | `protobuf_bytes` | `bytes` | Yes | Protobuf-encoded message |
 | `descriptor_bytes` | `bytes` | Yes | Compiled descriptor set |
-| `pretty` | `bool` | No | If `True`, format JSON with indentation (default: `False`) |
 | `message_type` | `str` | Yes | Full message type name (e.g., `"user.User"`) |
+| `pretty` | `bool` | No | If `True`, format JSON with indentation (default: `False`) |
 
 #### Returns
 
@@ -440,7 +440,7 @@ protoruf includes complete type stubs for IDE autocomplete and type checking:
 def compile_proto(proto_path: str, include_paths: list[str] | None = None) -> bytes: ...
 def compile_proto_from_sources(files: dict[str, str], root: str, include_imports: bool = True) -> bytes: ...
 def json_to_protobuf(json_str: str, descriptor_bytes: bytes, message_type: str) -> bytes: ...
-def protobuf_to_json(protobuf_bytes: bytes, descriptor_bytes: bytes, pretty: bool = False, message_type: str = ...) -> str: ...
+def protobuf_to_json(protobuf_bytes: bytes, descriptor_bytes: bytes, message_type: str, pretty: bool = False) -> str: ...
 
 class DescriptorCache:
     def __init__(self, descriptor_bytes: bytes) -> None: ...

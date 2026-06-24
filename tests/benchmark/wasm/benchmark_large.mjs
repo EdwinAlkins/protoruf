@@ -18,7 +18,7 @@ const MEASURED_RUNS = 10;
 const descriptor = protoruf.compileProtoFromSources(LARGE_PROTO, LARGE_ROOT);
 const jsonStr = JSON.stringify(buildLargeDataset(N_RECORDS));
 const encode = (s) => protoruf.jsonToProtobuf(s, descriptor, LARGE_TYPE);
-const decode = (b) => protoruf.protobufToJson(b, descriptor, false, LARGE_TYPE);
+const decode = (b) => protoruf.protobufToJson(b, descriptor, LARGE_TYPE, false);
 const comparator = await setupProtobufjs(LARGE_PROTO, LARGE_ROOT, LARGE_TYPE);
 
 await runScenario({

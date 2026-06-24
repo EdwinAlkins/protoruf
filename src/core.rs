@@ -216,8 +216,8 @@ pub fn json_to_protobuf_bytes(
 pub fn protobuf_to_json_string(
     protobuf_bytes: &[u8],
     descriptor_bytes: &[u8],
-    pretty: bool,
     message_type: &str,
+    pretty: bool,
 ) -> Result<String, String> {
     let pool = pool_cache::load_descriptor_pool_cached(descriptor_bytes)?;
     let message_descriptor = get_message_descriptor(&pool, message_type)?;
@@ -265,7 +265,7 @@ mod tests {
 
         // Protobuf -> JSON
         let json_output =
-            protobuf_to_json_string(&protobuf_bytes, &descriptor, false, "message.Message")
+            protobuf_to_json_string(&protobuf_bytes, &descriptor, "message.Message", false)
                 .unwrap();
 
         // Verify roundtrip
@@ -294,7 +294,7 @@ mod tests {
         let protobuf_bytes =
             json_to_protobuf_bytes(json_input, &descriptor, "message.Message").unwrap();
         let json_output =
-            protobuf_to_json_string(&protobuf_bytes, &descriptor, false, "message.Message")
+            protobuf_to_json_string(&protobuf_bytes, &descriptor, "message.Message", false)
                 .unwrap();
 
         let result: JsonValue = serde_json::from_str(&json_output).unwrap();
@@ -322,7 +322,7 @@ mod tests {
         let protobuf_bytes =
             json_to_protobuf_bytes(json_input, &descriptor, "message.Message").unwrap();
         let pretty_json =
-            protobuf_to_json_string(&protobuf_bytes, &descriptor, true, "message.Message").unwrap();
+            protobuf_to_json_string(&protobuf_bytes, &descriptor, "message.Message", true).unwrap();
 
         // Pretty JSON should contain newlines
         assert!(pretty_json.contains('\n'));
@@ -377,7 +377,7 @@ mod tests {
         let protobuf_bytes =
             json_to_protobuf_bytes(json_input, &descriptor, "message.Message").unwrap();
         let json_output =
-            protobuf_to_json_string(&protobuf_bytes, &descriptor, true, "message.Message").unwrap();
+            protobuf_to_json_string(&protobuf_bytes, &descriptor, "message.Message", true).unwrap();
 
         let result: JsonValue = serde_json::from_str(&json_output).unwrap();
         assert_eq!(result["id"], "full-test");
@@ -394,7 +394,7 @@ mod tests {
         let protobuf_bytes =
             json_to_protobuf_bytes(json_input, &descriptor, "message.Message").unwrap();
         let json_output =
-            protobuf_to_json_string(&protobuf_bytes, &descriptor, false, "message.Message")
+            protobuf_to_json_string(&protobuf_bytes, &descriptor, "message.Message", false)
                 .unwrap();
 
         let result: JsonValue = serde_json::from_str(&json_output).unwrap();
@@ -489,7 +489,7 @@ mod tests {
 
         let json_desc = protobuf_to_json_string_with_descriptor(&from_desc, &desc, false).unwrap();
         let json_bytes =
-            protobuf_to_json_string(&from_bytes, &descriptor, false, "message.Message").unwrap();
+            protobuf_to_json_string(&from_bytes, &descriptor, "message.Message", false).unwrap();
         assert_eq!(json_desc, json_bytes);
     }
 
@@ -516,7 +516,7 @@ mod tests {
         let pb =
             json_to_protobuf_bytes(r#"{"id":"123","tags":["a","b"]}"#, &descriptor, "user.User")
                 .unwrap();
-        let json = protobuf_to_json_string(&pb, &descriptor, false, "user.User").unwrap();
+        let json = protobuf_to_json_string(&pb, &descriptor, "user.User", false).unwrap();
         let result: JsonValue = serde_json::from_str(&json).unwrap();
         assert_eq!(result["id"], "123");
         assert_eq!(result["tags"], serde_json::json!(["a", "b"]));
@@ -535,7 +535,7 @@ mod tests {
         let descriptor = compile_proto_from_sources(files, "user.proto", true).unwrap();
         let pb =
             json_to_protobuf_bytes(r#"{"id":{"value":"x"}}"#, &descriptor, "user.User").unwrap();
-        let json = protobuf_to_json_string(&pb, &descriptor, false, "user.User").unwrap();
+        let json = protobuf_to_json_string(&pb, &descriptor, "user.User", false).unwrap();
         let result: JsonValue = serde_json::from_str(&json).unwrap();
         assert_eq!(result["id"]["value"], "x");
     }

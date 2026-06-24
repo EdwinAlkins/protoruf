@@ -64,8 +64,8 @@ fn bench_cold_proto_to_json(c: &mut Criterion) {
             core::protobuf_to_json_string(
                 black_box(&protobuf),
                 black_box(&descriptor),
-                false,
                 "message.Message",
+                false,
             )
             .unwrap()
         });

@@ -41,7 +41,7 @@ let wire = core::json_to_protobuf_bytes(
 ## Protobuf → JSON
 
 ```rust
-let json = core::protobuf_to_json_string(&wire, &descriptor, /* pretty */ true, "user.User")?;
+let json = core::protobuf_to_json_string(&wire, &descriptor, "user.User", /* pretty */ true)?;
 ```
 
 - `protobuf_bytes: &[u8]`, `descriptor_bytes: &[u8]`, `pretty: bool`, `message_type: &str`

@@ -50,14 +50,14 @@ pub fn json_to_protobuf(
 pub fn protobuf_to_json(
     protobuf_bytes: Buffer,
     descriptor_bytes: Buffer,
-    pretty: Option<bool>,
     message_type: String,
+    pretty: Option<bool>,
 ) -> Result<String> {
     core::protobuf_to_json_string(
         &protobuf_bytes,
         &descriptor_bytes,
-        pretty.unwrap_or(false),
         &message_type,
+        pretty.unwrap_or(false),
     )
     .map_err(|e| Error::from_reason(e))
 }

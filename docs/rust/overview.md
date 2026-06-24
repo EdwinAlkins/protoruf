@@ -41,7 +41,7 @@ use protoruf::core;
 
 let descriptor = core::compile_proto("schema.proto", None)?;
 let pb = core::json_to_protobuf_bytes(r#"{"id":"123"}"#, &descriptor, "user.User")?;
-let json = core::protobuf_to_json_string(&pb, &descriptor, true, "user.User")?;
+let json = core::protobuf_to_json_string(&pb, &descriptor, "user.User", true)?;
 ```
 
 For high-throughput loops, decode the pool once and reuse the resolved descriptor via the

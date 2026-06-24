@@ -60,7 +60,7 @@ console.log(`Protobuf: ${wire.length} bytes`);
 ```ts
 import { protobufToJson } from "@protoruf/node";
 
-const out = protobufToJson(wire, descriptor, /* pretty */ true, "message.Message");
+const out = protobufToJson(wire, descriptor, "message.Message", /* pretty */ true);
 console.log(out);
 ```
 
@@ -85,7 +85,7 @@ const descriptor = compileProto("message.proto");
 const json = '{"id":"123","content":"Hello","priority":1,"tags":["greeting"]}';
 const wire = jsonToProtobuf(json, descriptor, "message.Message");
 
-const out = protobufToJson(wire, descriptor, true, "message.Message");
+const out = protobufToJson(wire, descriptor, "message.Message", true);
 console.log(out);
 ```
 

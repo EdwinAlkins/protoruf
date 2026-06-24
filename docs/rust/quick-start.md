@@ -45,7 +45,7 @@ let json = r#"{"id":"123","content":"Hello"}"#;
 let wire = core::json_to_protobuf_bytes(json, &descriptor, "message.Message")?;
 
 // Protobuf bytes -> JSON (pretty)
-let out = core::protobuf_to_json_string(&wire, &descriptor, true, "message.Message")?;
+let out = core::protobuf_to_json_string(&wire, &descriptor, "message.Message", true)?;
 println!("{out}");
 ```
 
@@ -59,7 +59,7 @@ fn main() -> Result<(), String> {
 
     let json = r#"{"id":"123","content":"Hello"}"#;
     let wire = core::json_to_protobuf_bytes(json, &descriptor, "message.Message")?;
-    let out = core::protobuf_to_json_string(&wire, &descriptor, true, "message.Message")?;
+    let out = core::protobuf_to_json_string(&wire, &descriptor, "message.Message", true)?;
 
     println!("{out}");
     Ok(())

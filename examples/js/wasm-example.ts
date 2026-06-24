@@ -54,7 +54,7 @@ const wire = jsonToProtobuf(JSON.stringify(order), descriptor, "shop.Order");
 console.log(`protobuf wire size: ${wire.length} bytes`);
 
 // 3. Protobuf -> JSON (round-trip).
-const back = JSON.parse(protobufToJson(wire, descriptor, true, "shop.Order"));
+const back = JSON.parse(protobufToJson(wire, descriptor, "shop.Order", true));
 console.log("round-trip:", back);
 
 // 4. Reusable pool. WASM objects own native (linear-memory) state, so free it

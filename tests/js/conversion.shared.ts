@@ -21,8 +21,8 @@ export interface ProtorufApi {
   protobufToJson(
     bytes: Uint8Array,
     descriptor: Uint8Array,
-    pretty: boolean,
     messageType: string,
+    pretty: boolean,
   ): string;
   DescriptorCache: new (descriptor: Uint8Array) => ProtorufCache;
 }
@@ -58,7 +58,7 @@ export function runConversionSuite(api: ProtorufApi, label: string): void {
     const encode = (obj: unknown) =>
       api.jsonToProtobuf(JSON.stringify(obj), descriptor, "t.All");
     const decode = (bytes: Uint8Array) =>
-      JSON.parse(api.protobufToJson(bytes, descriptor, false, "t.All"));
+      JSON.parse(api.protobufToJson(bytes, descriptor, "t.All", false));
 
     test("compiles a non-empty descriptor", () => {
       expect(descriptor.length).toBeGreaterThan(0);
@@ -100,14 +100,14 @@ export function runConversionSuite(api: ProtorufApi, label: string): void {
     });
 
     test("pretty printing adds newlines", () => {
-      const pretty = api.protobufToJson(encode({ id: "p" }), descriptor, true, "t.All");
+      const pretty = api.protobufToJson(encode({ id: "p" }), descriptor, "t.All", true);
       expect(pretty).toContain("\n");
     });
 
     test("int64: Rust keeps full precision in JSON text; JS JSON.parse loses it >2^53", () => {
       const exact = "9223372036854775807"; // i64 max
       const bytes = api.jsonToProtobuf(`{"id":"big","big":${exact}}`, descriptor, "t.All");
-      const text = api.protobufToJson(bytes, descriptor, false, "t.All");
+      const text = api.protobufToJson(bytes, descriptor, "t.All", false);
       expect(text).toContain(exact); // exact on the Rust / JSON-text side
       expect(String(JSON.parse(text).big)).not.toBe(exact); // lost by JS number
     });
@@ -143,7 +143,7 @@ export function runConversionSuite(api: ProtorufApi, label: string): void {
         " message U { c.Id id = 1; google.protobuf.Timestamp at = 2; }";
       const d = api.compileProtoFromSources({ "c.proto": common, "u.proto": root }, "u.proto");
       const bytes = api.jsonToProtobuf('{"id":{"value":"x"}}', d, "u.U");
-      expect(JSON.parse(api.protobufToJson(bytes, d, false, "u.U")).id.value).toBe("x");
+      expect(JSON.parse(api.protobufToJson(bytes, d, "u.U", false)).id.value).toBe("x");
     });
   });
 }

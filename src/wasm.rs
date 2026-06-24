@@ -43,11 +43,16 @@ pub fn json_to_protobuf(
 pub fn protobuf_to_json(
     protobuf_bytes: &[u8],
     descriptor_bytes: &[u8],
-    pretty: bool,
     message_type: &str,
+    pretty: Option<bool>,
 ) -> Result<String, JsError> {
-    core::protobuf_to_json_string(protobuf_bytes, descriptor_bytes, pretty, message_type)
-        .map_err(|e| JsError::new(&e))
+    core::protobuf_to_json_string(
+        protobuf_bytes,
+        descriptor_bytes,
+        message_type,
+        pretty.unwrap_or(false),
+    )
+    .map_err(|e| JsError::new(&e))
 }
 
 /// A reusable, pre-decoded descriptor pool (equivalent of the Python class).

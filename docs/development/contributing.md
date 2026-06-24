@@ -10,6 +10,16 @@ Thank you for your interest in contributing to protoruf! This guide covers setup
 - **Rust** (1.70+) — [Install via rustup](https://rustup.rs/)
 - **[uv](https://docs.astral.sh/uv/)** — Fast Python package manager
 
+For the Node.js and browser (WASM) bindings, you also need:
+
+- **Node.js 20+** — [Install via nvm](https://github.com/nvm-sh/nvm) or [nodejs.org](https://nodejs.org/)
+- **[wasm-pack](https://rustwasm.github.io/wasm-pack/)** — builds the WASM package
+- The **`wasm32-unknown-unknown`** Rust target:
+
+```bash
+rustup target add wasm32-unknown-unknown
+```
+
 ### 1. Clone the Repository
 
 ```bash
@@ -19,19 +29,45 @@ cd protoruf
 
 ### 2. Install Dependencies
 
+Python:
+
 ```bash
 uv sync --dev --group benchmark --group docs
 ```
 
 This installs all development dependencies including `maturin`, `pytest`, and `mypy`.
 
-### 3. Build the Extension
+Node.js / WASM (only if you work on those bindings):
+
+```bash
+npm ci
+```
+
+This installs the JS dev dependencies (`@napi-rs/cli`, `vitest`, `protobufjs`).
+
+### 3. Build the Bindings
+
+Python extension:
 
 ```bash
 uv run maturin develop
 ```
 
 This compiles the Rust code and installs the Python package in development mode.
+
+Node.js addon (napi) and WASM package:
+
+```bash
+# Both at once (native addon + WASM)
+npm run build:js
+
+# Or individually
+npm run build:debug   # native Node addon (napi) -> dist/
+npm run build:wasm    # WASM package           -> dist/wasm/
+```
+
+`npm run test:js` runs `build:js` automatically (via `pretest:js`), so you rarely
+need to build by hand before testing.
 
 ## Project Structure
 
@@ -43,26 +79,36 @@ protoruf/
 │   ├── compiler.py            # Proto compilation utilities
 │   └── py.typed               # PEP 561 type marker
 ├── src/                       # Rust source code
-│   ├── lib.rs                 # Python bindings (PyO3)
-│   └── core.rs                # Core logic (pure Rust)
-├── tests/                     # Python test suite
+│   ├── lib.rs                 # Crate root + feature-gated binding modules
+│   ├── core.rs                # Core logic (pure Rust, no FFI)
+│   ├── python.rs              # Python bindings (PyO3, feature "python")
+│   ├── node.rs                # Node.js bindings (napi, feature "node")
+│   └── wasm.rs                # Browser/WASM bindings (wasm-bindgen, feature "wasm")
+├── tests/                     # Test suites
 │   ├── proto/                 # Test proto files
 │   ├── test_models.py         # Pydantic test models
-│   └── test_rust_json_protobuf.py
-├── examples/                  # Usage examples
+│   ├── test_*.py              # Python tests
+│   └── js/                    # JS tests (node + wasm + parity, vitest)
+├── examples/                  # Usage examples (Python + examples/js/)
+├── package.json               # Node build/test scripts (napi, wasm-pack, vitest)
 └── docs/                      # Documentation
 ```
+
+Each binding is a thin wrapper over `src/core.rs` and is gated behind its own
+Cargo feature (`python`, `node`, `wasm`), so building one never pulls in the
+others' dependencies.
 
 ## Development Workflow
 
 ### Make Changes
 
-1. Edit Rust code in `src/`
-2. Edit Python code in `python/protoruf/`
-3. Rebuild the extension:
+1. Edit Rust code in `src/` (shared logic in `core.rs`, bindings in `python.rs` / `node.rs` / `wasm.rs`)
+2. Edit Python code in `python/protoruf/`, or JS/TS in `examples/js/` and `tests/js/`
+3. Rebuild the affected binding(s):
 
 ```bash
-uv run maturin develop
+uv run maturin develop   # Python
+npm run build:js         # Node addon + WASM
 ```
 
 ### Run Tests
@@ -75,15 +121,46 @@ uv run pytest tests/ -v
 
 #### Rust Tests
 
+Unit tests live in `src/*.rs` under `#[cfg(test)]`. Run them across all targets
+(the same as CI):
+
 ```bash
-cargo test --lib
+cargo test --all-targets
+```
+
+#### Node / WASM Tests (JavaScript)
+
+The vitest suite (`tests/js/`) covers the native Node addon, the WASM build, and
+node↔wasm parity. `pretest:js` builds both bindings first, so a single command
+does everything:
+
+```bash
+npm run test:js
 ```
 
 #### All Tests
 
 ```bash
-uv run pytest tests/ -v && cargo test --lib
+uv run pytest tests/ -v && cargo test --all-targets && npm run test:js
 ```
+
+### Rust Validation (format & lint)
+
+These are the exact commands CI runs (`.github/workflows/rust-test.yml`) — run
+them before pushing:
+
+```bash
+# Format the code in place
+cargo fmt --all
+
+# Validation (what CI checks): formatting is correct, no clippy warnings, tests pass
+cargo fmt --all -- --check
+cargo clippy --all-targets -- -D warnings
+cargo test --all-targets
+```
+
+`cargo clippy` treats every warning as an error (`-D warnings`), so the build
+fails on any lint. Run `cargo fmt --all` first to auto-fix formatting.
 
 ### Type Checking
 
@@ -99,24 +176,34 @@ Before committing, ensure all checks pass:
 # 1. Python tests
 uv run pytest tests/ -v
 
-# 2. Rust tests
-cargo test --lib
+# 2. Rust formatting (CI checks this)
+cargo fmt --all -- --check
 
-# 3. Type checking
+# 3. Rust lints (warnings fail the build)
+cargo clippy --all-targets -- -D warnings
+
+# 4. Rust tests
+cargo test --all-targets
+
+# 5. Type checking
 uv run mypy python/protoruf/ --ignore-missing-imports
 
-# 4. Build verification
+# 6. Build verification
 uv run maturin develop
+
+# 7. Node / WASM tests (if you touched core.rs or the node/wasm bindings)
+npm run test:js
 ```
 
 ## Adding Features
 
 ### Rust Changes
 
-1. Add logic to `src/core.rs` (pure Rust)
-2. Expose via Python bindings in `src/lib.rs`
+1. Add logic to `src/core.rs` (pure Rust, the single source of truth)
+2. Expose it in each binding you support: `src/python.rs` (PyO3), `src/node.rs`
+   (napi), `src/wasm.rs` (wasm-bindgen) — keep the signatures consistent
 3. Update type stubs in `python/protoruf/_protoruf.pyi`
-4. Write tests in both Rust and Python
+4. Write tests in Rust (`#[cfg(test)]` in `core.rs`), Python (`tests/`), and JS (`tests/js/`)
 
 ### Python Changes
 
@@ -168,7 +255,8 @@ def test_nested_message():
 
 ### Rust
 
-- Follow standard Rust conventions (rustfmt)
+- Follow standard Rust conventions — format with `cargo fmt --all`
+- Keep `cargo clippy --all-targets -- -D warnings` clean (no warnings)
 - Use descriptive variable names
 - Add comments for complex logic
 - Write unit tests for core functions
@@ -182,13 +270,20 @@ def test_nested_message():
 
 ## Building for Distribution
 
-### Build Wheels
+### Build Wheels (Python)
 
 ```bash
 uv run maturin build
 ```
 
 This creates distributable wheels in `target/wheels/`.
+
+### Build npm Packages (Node / WASM)
+
+```bash
+npm run build              # release native addon (napi)
+npm run pack:wasm          # release WASM package for the browser
+```
 
 ### Local Install
 

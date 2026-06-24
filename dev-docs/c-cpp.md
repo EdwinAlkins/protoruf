@@ -45,7 +45,7 @@ fonctions `core::*` qui renvoient des `Result<_, String>` :
 // core.rs — signatures réutilisées telles quelles par TOUS les bindings
 pub fn compile_proto(proto_path: &str, include_paths: Option<Vec<String>>) -> Result<Vec<u8>, String>;
 pub fn json_to_protobuf_bytes(json_str: &str, descriptor_bytes: &[u8], message_type: &str) -> Result<Vec<u8>, String>;
-pub fn protobuf_to_json_string(protobuf_bytes: &[u8], descriptor_bytes: &[u8], pretty: bool, message_type: &str) -> Result<String, String>;
+pub fn protobuf_to_json_string(protobuf_bytes: &[u8], descriptor_bytes: &[u8], message_type: &str, pretty: bool) -> Result<String, String>;
 pub fn load_descriptor_pool(descriptor_bytes: &[u8]) -> Result<DescriptorPool, String>;
 pub fn get_message_descriptor(pool: &DescriptorPool, message_type: &str) -> Result<MessageDescriptor, String>;
 pub fn json_to_protobuf_bytes_with_descriptor(json_str: &str, desc: &MessageDescriptor) -> Result<Vec<u8>, String>;
@@ -345,8 +345,8 @@ ProtorufStatus protoruf_json_to_protobuf(
 ProtorufStatus protoruf_protobuf_to_json(
     const uint8_t* protobuf_bytes, size_t protobuf_len,
     const uint8_t* descriptor_bytes, size_t descriptor_len,
-    bool pretty,
     const char* message_type,
+    bool pretty = false,
     char** out_buf, size_t* out_len);
 
 /* --- Descriptor cache (pool pré-décodé, réutilisable) --- */

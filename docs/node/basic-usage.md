@@ -53,7 +53,7 @@ const wire = jsonToProtobuf(json, descriptor, "user.User");
 ```ts
 import { protobufToJson } from "@protoruf/node";
 
-const json = protobufToJson(wire, descriptor, /* pretty */ true, "user.User");
+const json = protobufToJson(wire, descriptor, "user.User", /* pretty */ true);
 ```
 
 **Parameters**
@@ -119,7 +119,7 @@ jsonToProtobuf('{"title":"Fix bug","priority":2}', descriptor, "Task");
 On **output**, enums are emitted as their **numeric value**:
 
 ```ts
-JSON.parse(protobufToJson(wire, descriptor, false, "Task")).priority; // 2
+JSON.parse(protobufToJson(wire, descriptor, "Task", false)).priority; // 2
 ```
 
 ### Repeated fields
@@ -166,7 +166,7 @@ proto3 default values (empty string, `0`, `false`, enum `0`, empty list/map) are
 from the output JSON:
 
 ```ts
-JSON.parse(protobufToJson(jsonToProtobuf('{"id":"x"}', d, "user.User"), d, false, "user.User"));
+JSON.parse(protobufToJson(jsonToProtobuf('{"id":"x"}', d, "user.User"), d, "user.User", false));
 // => { id: "x" }   // unset fields are absent
 ```
 

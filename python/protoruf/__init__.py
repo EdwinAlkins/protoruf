@@ -115,8 +115,8 @@ def pydantic_to_protobuf(
 def protobuf_to_json(
     protobuf_bytes: bytes,
     descriptor_bytes: bytes,
+    message_type: str,
     pretty: bool = False,
-    message_type: str = None,  # type: ignore[assignment]
 ) -> str:
     """
     Convert a Protobuf message to a JSON string.
@@ -124,8 +124,8 @@ def protobuf_to_json(
     Args:
         protobuf_bytes: Protobuf message as bytes
         descriptor_bytes: Compiled protobuf descriptor set (from compile_proto or load_descriptor)
-        pretty: If True, format JSON with indentation
         message_type: Full message type name (e.g., "user.User", "ecommerce.Order")
+        pretty: If True, format JSON with indentation (default: False)
 
     Returns:
         JSON string representation
@@ -134,7 +134,7 @@ def protobuf_to_json(
         RuntimeError: If decoding or JSON serialization fails
     """
     return _protoruf.protobuf_to_json(
-        protobuf_bytes, descriptor_bytes, pretty, message_type
+        protobuf_bytes, descriptor_bytes, message_type, pretty=pretty
     )
 
 
@@ -156,5 +156,5 @@ def protobuf_to_pydantic(
     Returns:
         An instance of the Pydantic model class provided (model_class)
     """
-    json_str = protobuf_to_json(protobuf_bytes, descriptor_bytes, False, message_type)
+    json_str = protobuf_to_json(protobuf_bytes, descriptor_bytes, message_type, pretty=False)
     return model_class.model_validate_json(json_str)

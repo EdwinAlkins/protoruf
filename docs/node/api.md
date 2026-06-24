@@ -84,8 +84,8 @@ Convert a Protobuf message to a JSON string.
 function protobufToJson(
   protobufBytes: Buffer,
   descriptorBytes: Buffer,
-  pretty: boolean | undefined | null,
   messageType: string,
+  pretty?: boolean | undefined | null,
 ): string;
 ```
 
@@ -93,8 +93,8 @@ function protobufToJson(
 |-----------|------|----------|-------------|
 | `protobufBytes` | `Buffer` | yes | Encoded message |
 | `descriptorBytes` | `Buffer` | yes | Descriptor set |
-| `pretty` | `boolean` | no | Indent the output (default `false`) |
 | `messageType` | `string` | yes | Fully-qualified message name |
+| `pretty` | `boolean` | no | Indent the output (default `false`) |
 
 **Returns** `string` — the JSON representation.
 

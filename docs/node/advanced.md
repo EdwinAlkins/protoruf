@@ -54,7 +54,7 @@ export function protobufToObject<T>(
   schema: z.ZodType<T>,
   messageType: string,
 ): T {
-  return schema.parse(JSON.parse(protobufToJson(bytes, descriptor, false, messageType)));
+  return schema.parse(JSON.parse(protobufToJson(bytes, descriptor, messageType, false)));
 }
 ```
 
@@ -113,7 +113,7 @@ registry.set("order", compileProto("order.proto"));
 loads them as `number` (a double) and **loses precision above 2^53**:
 
 ```ts
-const text = protobufToJson(wire, descriptor, false, "T");
+const text = protobufToJson(wire, descriptor, "T", false);
 // the JSON *text* keeps the exact digits, e.g. ..."big":9223372036854775807...
 JSON.parse(text).big; // 9223372036854776000  <-- precision lost by JSON.parse
 ```
@@ -129,7 +129,7 @@ console.log(`descriptor: ${descriptor.length} bytes`);
 
 // verify a round-trip preserves data
 const original = '{"id":"123"}';
-const back = protobufToJson(jsonToProtobuf(original, d, "M"), d, false, "M");
+const back = protobufToJson(jsonToProtobuf(original, d, "M"), d, "M", false);
 console.assert(JSON.parse(back).id === "123");
 ```
 

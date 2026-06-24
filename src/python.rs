@@ -46,15 +46,16 @@ fn json_to_protobuf<'py>(
 
 /// Convert a Protobuf message (bytes) to a JSON string
 #[pyfunction]
+#[pyo3(signature = (protobuf_bytes, descriptor_bytes, message_type, pretty = false))]
 fn protobuf_to_json<'py>(
     py: Python<'py>,
     protobuf_bytes: &[u8],
     descriptor_bytes: &[u8],
-    pretty: bool,
     message_type: &str,
+    pretty: bool,
 ) -> PyResult<String> {
     py.detach(|| {
-        core::protobuf_to_json_string(protobuf_bytes, descriptor_bytes, pretty, message_type)
+        core::protobuf_to_json_string(protobuf_bytes, descriptor_bytes, message_type, pretty)
     })
     .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))
 }

@@ -21,7 +21,7 @@
     "serialization"
   ],
   "engines": {
-    "node": ">= 12"
+    "node": ">=18"
   },
   "napi": {
     "name": "protoruf",

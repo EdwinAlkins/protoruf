@@ -17,8 +17,8 @@ def json_to_protobuf(
 def protobuf_to_json(
     protobuf_bytes: bytes,
     descriptor_bytes: bytes,
+    message_type: str,
     pretty: bool = False,
-    message_type: str = ...,
 ) -> str: ...
 
 

@@ -65,8 +65,8 @@ function jsonToProtobuf(jsonStr: string, descriptorBytes: Uint8Array, messageTyp
 function protobufToJson(
   protobufBytes: Uint8Array,
   descriptorBytes: Uint8Array,
-  pretty: boolean,
   messageType: string,
+  pretty?: boolean,
 ): string;
 ```
 
@@ -74,8 +74,8 @@ function protobufToJson(
 |-----------|------|-------------|
 | `protobufBytes` | `Uint8Array` | Encoded message |
 | `descriptorBytes` | `Uint8Array` | Descriptor set |
-| `pretty` | `boolean` | Indent the output |
 | `messageType` | `string` | Fully-qualified message name |
+| `pretty` | `boolean` | Indent the output (optional, default `false`) |
 
 **Returns** `string`. **Throws** on decode/serialization failure.
 

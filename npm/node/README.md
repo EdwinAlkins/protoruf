@@ -57,7 +57,7 @@ const descriptor = compileProto("message.proto");
 const pb = jsonToProtobuf('{"id":"123","tags":["a","b"]}', descriptor, "message.Message");
 
 // Protobuf -> JSON
-const json = protobufToJson(pb, descriptor, /* pretty */ true, "message.Message");
+const json = protobufToJson(pb, descriptor, "message.Message", /* pretty */ true);
 ```
 
 ### High throughput: `DescriptorCache`

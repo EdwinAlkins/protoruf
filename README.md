@@ -65,7 +65,7 @@ import { compileProto, jsonToProtobuf, protobufToJson } from "@protoruf/node";
 
 const descriptor = compileProto("message.proto");
 const pb = jsonToProtobuf('{"id":"123"}', descriptor, "message.Message");
-console.log(protobufToJson(pb, descriptor, true, "message.Message"));
+console.log(protobufToJson(pb, descriptor, "message.Message", true));
 ```
 
 **Browser (WASM)**
