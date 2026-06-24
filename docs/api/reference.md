@@ -360,6 +360,17 @@ class DescriptorCache:
         message_type: str,
         pretty: bool = False,
     ) -> str: ...
+    def pydantic_to_protobuf(
+        self,
+        pydantic_model: BaseModel,
+        message_type: str,
+    ) -> bytes: ...
+    def protobuf_to_pydantic(
+        self,
+        protobuf_bytes: bytes,
+        model_class: Type[T],
+        message_type: str,
+    ) -> T: ...
 ```
 
 #### Constructor
@@ -382,6 +393,16 @@ invalid or the message type is not found.
 Convert a Protobuf message to a JSON string. Raises `RuntimeError` on decoding
 or serialization failure, `ValueError` if the message type is not found.
 
+`pydantic_to_protobuf(pydantic_model, message_type) -> bytes`
+
+Convert a Pydantic model to a Protobuf message. Pure-Python wrapper that calls
+`model_dump_json()` and feeds the result to the cached `json_to_protobuf`.
+
+`protobuf_to_pydantic(protobuf_bytes, model_class, message_type) -> T`
+
+Convert a Protobuf message to an instance of `model_class`. Pure-Python wrapper
+around the cached `protobuf_to_json` followed by `model_class.model_validate_json()`.
+
 A single cache instance handles every message type defined in the descriptor and
 is safe to share across threads.
 
@@ -401,6 +422,10 @@ for json_data in json_stream:
 
 # Round-trip back to JSON
 restored = cache.protobuf_to_json(protobuf_bytes, "user.User", pretty=True)
+
+# The same cache also drives Pydantic conversions
+protobuf_bytes = cache.pydantic_to_protobuf(user_model, "user.User")
+user_model = cache.protobuf_to_pydantic(protobuf_bytes, User, "user.User")
 ```
 
 The output format is identical to the free functions (snake_case field names,

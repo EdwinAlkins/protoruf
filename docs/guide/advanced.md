@@ -97,6 +97,32 @@ restored = cache.protobuf_to_json(protobuf_bytes, "message.Message")
 A single cache instance handles every message type in the descriptor and is safe
 to share across threads. The output format is identical to the free functions.
 
+The cache also exposes the Pydantic helpers, so models benefit from the same
+pre-decoded pool:
+
+```python
+from protoruf import compile_proto, DescriptorCache
+from pydantic import BaseModel
+
+class Message(BaseModel):
+    id: str = ""
+    content: str = ""
+
+cache = DescriptorCache(compile_proto("schema.proto"))
+
+# Pydantic model -> protobuf bytes
+protobuf_bytes = cache.pydantic_to_protobuf(
+    Message(id="123", content="hi"), "message.Message"
+)
+
+# protobuf bytes -> Pydantic model instance
+message = cache.protobuf_to_pydantic(protobuf_bytes, Message, "message.Message")
+```
+
+These are thin, pure-Python wrappers over `model_dump_json()` /
+`model_validate_json()` on top of the cached JSON conversions — the descriptor
+pool is still decoded only once.
+
 !!! tip "Prefer the cache"
     Reach for the free functions only for one-off conversions. Any loop or
     long-lived service should hold a `DescriptorCache`.
