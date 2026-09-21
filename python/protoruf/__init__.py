@@ -24,10 +24,10 @@ __version__ = "0.2.0"
 class DescriptorCache:
     """Pre-decoded descriptor pool.
 
-    Build it once and reuse it across conversions to avoid re-decoding the
-    descriptor set on every call (the dominant cost). Wraps the native Rust
-    cache and adds Pydantic helpers, which are pure-Python (de)serialization on
-    top of the JSON conversions.
+    Build it once and reuse it across conversions to avoid per-call descriptor
+    hashing, the global LRU lock, and repeated message-type lookup. Wraps the
+    native Rust cache and adds Pydantic helpers, which are pure-Python
+    (de)serialization on top of the JSON conversions.
     """
 
     def __init__(self, descriptor_bytes: bytes) -> None:

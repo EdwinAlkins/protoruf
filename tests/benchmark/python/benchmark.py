@@ -7,8 +7,8 @@ Measures timings for:
   - Parsing/deserialization : Protobuf -> JSON
 
 protoruf uses the free functions `json_to_protobuf` / `protobuf_to_json`, which
-re-decode the descriptor on every call. For the cached "hot loop" scenario using
-`DescriptorCache`, see `benchmark_hot_loop.py`.
+reuse a decoded pool through the global LRU after warmup. For the explicit
+`DescriptorCache` scenario, see `benchmark_hot_loop.py`.
 
 Uses the descriptor compiled by protoruf for both libraries, to avoid any
 external compilation with protoc.

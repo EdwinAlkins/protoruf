@@ -4,8 +4,9 @@ Performance, memory management, Web Workers, security and Zod integration.
 
 ## High throughput: `DescriptorCache`
 
-The free functions decode the descriptor set on **every** call. `DescriptorCache` decodes the
-pool **once** and reuses it — the dominant performance lever for repeated conversions.
+The free functions reuse decoded pools through a module-wide LRU, but hash the
+descriptor bytes and resolve the message type on every call. `DescriptorCache`
+holds a pool and memoizes message descriptors for repeated conversions.
 
 ```ts
 import { DescriptorCache } from "@protoruf/wasm";

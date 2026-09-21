@@ -36,8 +36,10 @@ pkg.keywords = ["protobuf", "json", "rust", "wasm", "webassembly", "serializatio
 
 if (!Array.isArray(pkg.files)) pkg.files = [];
 if (!pkg.files.includes("README.md")) pkg.files.push("README.md");
+if (!pkg.files.includes("LICENSE")) pkg.files.push("LICENSE");
 
 writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + "\n");
 copyFileSync(join(root, "npm", "wasm", "README.md"), join(outDir, "README.md"));
+copyFileSync(join(root, "LICENSE"), join(outDir, "LICENSE"));
 
 console.log(`Prepared ${pkg.name}@${pkg.version} in ${outDir}`);

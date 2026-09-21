@@ -30,23 +30,26 @@ cargo test --lib       # Rust tests
 > file   python/protoruf/_protoruf*.so   # debug shows "with debug_info"
 > ```
 
-Four benchmarks, deliberately **kept separate** to stay transparent about what is
-measured. They form a 2×2 grid: **small vs large** message, and **free functions
-(re-decode each call) vs `DescriptorCache` (decoded once)**.
+Four benchmarks form a 2×2 grid: **small vs large** message, and **free
+functions using the process-wide LRU vs explicit `DescriptorCache`**. These
+scripts do not measure a cold descriptor decode. Earlier results labeled
+"cold" should be rerun and relabeled before publication.
 
-| File | protoruf scenario | Message | Descriptor decoded |
+| File | protoruf scenario | Message | Pool reuse |
 | --- | --- | --- | --- |
-| `benchmark.py` | Free functions `json_to_protobuf` / `protobuf_to_json` | small (`tests/proto/message.proto`) | on **every** call |
-| `benchmark_hot_loop.py` | `DescriptorCache` | small (`tests/proto/message.proto`) | **once**, outside the loop |
-| `benchmark_large.py` | Free functions `json_to_protobuf` / `protobuf_to_json` | **5 000 records** (`proto/large.proto`) | on **every** call |
-| `benchmark_large_hot_loop.py` | `DescriptorCache` | **5 000 records** (`proto/large.proto`) | **once**, outside the loop |
+| `benchmark.py` | Free functions `json_to_protobuf` / `protobuf_to_json` | small (`tests/proto/message.proto`) | global LRU hit after warmup |
+| `benchmark_hot_loop.py` | `DescriptorCache` | small (`tests/proto/message.proto`) | held by the cache |
+| `benchmark_large.py` | Free functions `json_to_protobuf` / `protobuf_to_json` | **5 000 records** (`proto/large.proto`) | global LRU hit after warmup |
+| `benchmark_large_hot_loop.py` | `DescriptorCache` | **5 000 records** (`proto/large.proto`) | held by the cache |
 
 ```bash
-uv run python tests/benchmark/python/benchmark.py > benchmark.txt # small, "cold" (decode per call)
+uv run python tests/benchmark/python/benchmark.py > benchmark.txt # small, global LRU hit
 uv run python tests/benchmark/python/benchmark_hot_loop.py > benchmark_hot_loop.txt    # small, hot loop (cached pool)
-uv run python tests/benchmark/python/benchmark_large.py > benchmark_large.txt    # large, "cold" (decode per call)
+uv run python tests/benchmark/python/benchmark_large.py > benchmark_large.txt    # large, global LRU hit
 uv run python tests/benchmark/python/benchmark_large_hot_loop.py > benchmark_large_hot_loop.txt   # large, hot loop (cached pool)
 ```
+
+The free-function runs warm the process-wide LRU before timing; they do not measure a cold descriptor decode. The explicit cache runs avoid the descriptor hash and global LRU lock.
 
 Shared timing logic lives in [`benchmark_utils.py`](benchmark_utils.py).
 
@@ -57,9 +60,9 @@ same protocol:
 
 | Parameter | Small messages | Large messages |
 | --- | --- | --- |
-| Warmup | 1 000 iterations | 10 iterations |
+| Warmup | 1 000 free / 100 explicit-cache iterations | 10 iterations |
 | Measured runs | 20 | 10 |
-| Conversions per run | 100 000 | 200 |
+| Conversions per run | 10 000 free / 1 000 explicit-cache | 200 |
 | GC | disabled during measured runs | disabled during measured runs |
 | Reported stats | median, p95, stddev | median, p95, stddev |
 | Throughput | msg/s | msg/s **and** MB/s |
@@ -86,17 +89,15 @@ reproducibility; the actual JSON size (~1.4 MB) is printed at runtime.
 
 ### Interpreting results
 
-- **`benchmark.py`** reflects the simplest usage: every conversion re-decodes the
-  `DescriptorPool`. On a *small* message that fixed cost dominates, and protoruf
-  there is roughly on par with (slightly below) `google.protobuf`.
-- **`benchmark_hot_loop.py`** reflects the recommended usage for high throughput:
-  the pool is decoded once via `DescriptorCache` and then reused. protoruf there
-  is typically several times faster on writes and reads (exact ratio depends on
-  your machine — run the benchmark locally).
+- **`benchmark.py`** measures free functions with a warmed global LRU. Each
+  conversion still hashes the descriptor bytes and looks up the message type.
+- **`benchmark_hot_loop.py`** holds the pool and message descriptors in an
+  explicit `DescriptorCache`. Compare it with the free-function run only after
+  accounting for their different iteration counts.
 - **`benchmark_large.py` / `benchmark_large_hot_loop.py`** target the regime where
-  the **payload conversion** dominates the fixed per-call costs — protoruf can show
-  a real gain **even without** the cache. Both use [`proto/large.proto`](proto/large.proto)
+  the **payload conversion** dominates the fixed per-call costs. Both reuse a
+  decoded pool, through the global LRU or an explicit cache. Both use [`proto/large.proto`](proto/large.proto)
   (`bench.Dataset`: nested records with scalars, enum, repeated field, map and vector).
 
-When citing speedup numbers, always specify the scenario (small/large, cached/uncached)
+When citing speedup numbers, always specify the scenario (small/large, global LRU/explicit cache)
 and clarify that the comparison is JSON ↔ Protobuf conversion, not protobuf encode alone.

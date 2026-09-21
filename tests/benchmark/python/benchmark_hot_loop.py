@@ -6,7 +6,7 @@ Benchmark protoruf (hot loop) vs google.protobuf for JSON <-> Protobuf conversio
 
 Difference from `benchmark.py`:
   - `benchmark.py` uses the free functions `json_to_protobuf` /
-    `protobuf_to_json`, which **re-decode the descriptor on every call**.
+    `protobuf_to_json`, which use a process-wide LRU after warmup.
   - This file uses `DescriptorCache`, which **decodes the pool only once**
     (outside the timed loop) and then reuses it -- the recommended usage for a
     service processing many messages.

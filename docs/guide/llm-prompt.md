@@ -106,10 +106,10 @@ Thin wrappers: `pydantic_to_protobuf` calls `model.model_dump_json()` then
 
 ### `DescriptorCache` (high-throughput)
 
-Decoding the descriptor set is the dominant cost. `DescriptorCache` decodes the
-pool **once** and memoizes resolved message descriptors — roughly a **7–14×
-speedup** in loops. One instance handles every message type in the descriptor and
-is safe to share across threads.
+Free functions reuse decoded pools through a process-wide LRU, but hash the
+descriptor bytes and resolve the message type on every call. `DescriptorCache`
+holds the pool and memoizes message descriptors, avoiding that per-call work.
+One instance handles every message type and is safe to share across threads.
 
 ```python
 class DescriptorCache:

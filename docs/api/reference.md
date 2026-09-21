@@ -345,10 +345,11 @@ print(result.content)  # Output: Hello
 
 A reusable, pre-decoded descriptor pool.
 
-The free functions above decode the descriptor set on **every** call, which is
-the dominant cost in hot loops. `DescriptorCache` decodes the pool once (and
-memoizes resolved message descriptors), giving roughly a **7–14× speedup** when
-converting many messages. Build one instance and reuse it everywhere.
+The free functions above reuse decoded pools through a process-wide LRU, but
+hash the descriptor bytes and resolve the message type on each call.
+`DescriptorCache` holds a pool and memoizes message descriptors, avoiding that
+per-call work. Build one instance for repeated conversions and measure the
+benefit for your workload.
 
 ```python
 class DescriptorCache:

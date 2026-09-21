@@ -4,7 +4,7 @@ Benchmark protoruf vs google.protobuf on LARGE messages.
 
 ⚡ "Hot loop" variant — uses `DescriptorCache` (pool decoded once, outside the
 timed loop). For the same large message **without** the cache (free functions that
-re-decode the descriptor on every call), see `benchmark_large.py`.
+use the process-wide LRU after warmup), see `benchmark_large.py`.
 
 It uses a dedicated schema, `proto/large.proto` (`bench.Dataset`): a fixed number
 of nested `Record`s. The large message is round-tripped through protoruf and key

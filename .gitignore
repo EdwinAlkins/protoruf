@@ -238,3 +238,7 @@ node_modules/
 /release/
 
 /dev-docs/no-git/*
+
+# Local graphify and Codex data
+/graphify-out/
+/.codex/

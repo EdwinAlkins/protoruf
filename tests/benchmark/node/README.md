@@ -4,12 +4,14 @@ Same 2×2 grid as the Python benchmarks, for the **Node.js native addon**
 (`@protoruf/node`): **small vs large** message × **free functions vs
 `DescriptorCache`**.
 
-| File | protoruf scenario | Message | Descriptor decoded |
+| File | protoruf scenario | Message | Pool reuse |
 | --- | --- | --- | --- |
-| `benchmark.mjs` | Free functions | small | on **every** call |
-| `benchmark_hot_loop.mjs` | `DescriptorCache` | small | **once**, outside the loop |
-| `benchmark_large.mjs` | Free functions | **5 000 records** | on **every** call |
-| `benchmark_large_hot_loop.mjs` | `DescriptorCache` | **5 000 records** | **once**, outside the loop |
+| `benchmark.mjs` | Free functions | small | global LRU hit after warmup |
+| `benchmark_hot_loop.mjs` | `DescriptorCache` | small | held by the cache |
+| `benchmark_large.mjs` | Free functions | **5 000 records** | global LRU hit after warmup |
+| `benchmark_large_hot_loop.mjs` | `DescriptorCache` | **5 000 records** | held by the cache |
+
+The free-function runs warm the process-wide LRU before timing; they do not measure a cold descriptor decode. The explicit cache runs avoid the descriptor hash and global LRU lock.
 
 Shared timing logic lives in [`common.mjs`](common.mjs) (the JS counterpart of the
 Python [`benchmark_utils.py`](../python/benchmark_utils.py)).
@@ -31,9 +33,9 @@ Pass `--expose-gc` so the harness can control garbage collection between runs
 (without it, the benchmarks still run but GC is left uncontrolled):
 
 ```bash
-node --expose-gc tests/benchmark/node/benchmark.mjs > node_benchmark.txt               # small, "cold" (decode per call)
+node --expose-gc tests/benchmark/node/benchmark.mjs > node_benchmark.txt               # small, global LRU hit
 node --expose-gc tests/benchmark/node/benchmark_hot_loop.mjs > node_benchmark_hot_loop.txt       # small, hot loop (cached pool)
-node --expose-gc tests/benchmark/node/benchmark_large.mjs > node_benchmark_large.txt          # large, "cold" (decode per call)
+node --expose-gc tests/benchmark/node/benchmark_large.mjs > node_benchmark_large.txt          # large, global LRU hit
 node --expose-gc tests/benchmark/node/benchmark_large_hot_loop.mjs > node_benchmark_large_hot_loop.txt # large, hot loop (cached pool)
 ```
 

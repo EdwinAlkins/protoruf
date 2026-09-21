@@ -203,7 +203,7 @@ validating JSON, follow these rules exactly:
    before `pretty`.
 4. For more than a few conversions, call `load_descriptor_pool` +
    `get_message_descriptor` once and reuse the `*_with_descriptor` helpers in the
-   loop; don't re-decode the pool per message.
+   loop; this avoids descriptor hashing and global LRU lookup per message.
 5. Do **not** enable the `python`/`node`/`wasm` cargo features for library use —
    they only build FFI artifacts.
 6. Emit JSON in protoruf's shape (snake_case fields, numeric enums, numeric

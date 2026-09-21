@@ -5,6 +5,24 @@ All notable changes to **protoruf** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - Pending
+
+### Added
+
+- Node.js and browser/WASM bindings over the shared Rust conversion core.
+- In-memory proto compilation for all bindings, with optional imported-file inclusion.
+- A process-wide, 64-entry LRU for decoded descriptor pools used by free functions.
+
+### Fixed before publication
+
+- Tag pushes start GitHub assets and PyPI publication independently, with a shared
+  version check. Python wheels cover CPython 3.12–3.14 on Linux x86_64, Windows x64,
+  macOS Intel, and macOS arm64 using the `dist` profile.
+- Cache hits no longer copy descriptor bytes; misses decode outside the global lock.
+- The browser example uses the correct `protobufToJson` argument order.
+- Performance docs now describe the global LRU, and `include_imports=False` is
+  documented as unsuitable for standalone conversion when imports are required.
+
 ## [0.1.5] - 2026-06-18
 
 A follow-up to 0.1.4 focused on **concurrency** and **build ergonomics**: the
@@ -22,9 +40,10 @@ longer slows down every local rebuild.
 - **LTO and `codegen-units = 1` moved from the `release` profile to a new opt-in
   `dist` profile.** Full LTO is expensive at compile time and was slowing down
   every local rebuild (`uv sync` / `maturin develop`, which build in release by
-  default). Published wheels are now built with `maturin build --profile dist`,
-  which also adds `strip = true`. `panic = "abort"` is deliberately left unset to
-  preserve PyO3's panic-to-exception handling.
+  default). The profile adds `strip = true`; the publication workflow still
+  used `--release` at the time and switches to `--profile dist` for 0.2.0.
+  `panic = "abort"` is deliberately left unset to preserve PyO3's
+  panic-to-exception handling.
 
 ### Performance
 

@@ -4,12 +4,12 @@ Performance, object/Zod integration, and production patterns.
 
 ## High throughput: `DescriptorCache`
 
-This is the single most impactful optimization. The free functions (`jsonToProtobuf` /
-`protobufToJson`) **re-decode the descriptor set on every call**, which dominates the cost when
-converting many messages.
+The free functions (`jsonToProtobuf` / `protobufToJson`) reuse decoded pools through
+a process-wide, 64-entry LRU. Each call still hashes the descriptor bytes, takes the LRU lock,
+and resolves the message type.
 
-`DescriptorCache` decodes the pool **once** and reuses it across every conversion. Build it once,
-reuse it everywhere.
+`DescriptorCache` holds a pool and memoizes message descriptors. Build it once for repeated
+conversions and measure the benefit for your workload.
 
 ```ts
 import { compileProto, DescriptorCache } from "@protoruf/node";

@@ -68,7 +68,7 @@
         const wire = jsonToProtobuf(JSON.stringify(order), descriptor, "shop.Order");
         log("protobuf wire size:", wire.length, "bytes");
 
-        log("round-trip:\n" + protobufToJson(wire, descriptor, true, "shop.Order"));
+        log("round-trip:\n" + protobufToJson(wire, descriptor, "shop.Order", true));
 
         // WASM objects own linear-memory state: free it when done.
         const cache = new DescriptorCache(descriptor);

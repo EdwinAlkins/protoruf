@@ -64,8 +64,8 @@ pub fn protobuf_to_json(
 
 /// A reusable, pre-decoded descriptor pool (equivalent of the Python class).
 ///
-/// Decoding the descriptor set is the dominant cost of every conversion; build
-/// this once and reuse it across calls.
+/// Holds a decoded pool and memoized message descriptors for repeated conversions.
+/// Free functions also reuse pools through a process-wide LRU.
 #[napi]
 pub struct DescriptorCache {
     resolver: DescriptorResolver,

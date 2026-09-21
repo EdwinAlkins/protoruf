@@ -19,6 +19,7 @@ to the parent directory of `proto_path`.
 pub fn compile_proto_from_sources(
     files: HashMap<String, String>,
     root: &str,
+    include_imports: bool,
 ) -> Result<Vec<u8>, String>;
 ```
 
@@ -38,13 +39,14 @@ pub fn json_to_protobuf_bytes(
 pub fn protobuf_to_json_string(
     protobuf_bytes: &[u8],
     descriptor_bytes: &[u8],
-    pretty: bool,
     message_type: &str,
+    pretty: bool,
 ) -> Result<String, String>;
 ```
 
-These decode the descriptor pool on every call. For repeated conversions, prefer the cached
-path below.
+These reuse decoded pools through a process-wide LRU. Each call still hashes the
+descriptor bytes and resolves the message type. For repeated conversions, use the
+resolved-descriptor path below.
 
 ## Conversion (cached / high-throughput)
 

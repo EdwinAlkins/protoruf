@@ -1,4 +1,4 @@
-// WASM · small message · free functions (descriptor re-decoded on every call).
+// WASM · small message · free functions (global LRU hit after warmup).
 // Run: node --expose-gc tests/benchmark/wasm/benchmark.mjs   (after `npm run build:wasm`)
 import {
   protoruf,

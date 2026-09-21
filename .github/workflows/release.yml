@@ -19,17 +19,29 @@ permissions:
   contents: write # create/edit the GitHub Release
 
 jobs:
+  verify-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check tag against package versions
+        if: startsWith(github.ref, 'refs/tags/')
+        run: python scripts/check-release-version.py "${{ github.ref_name }}"
+
   # Build one native binary per platform.
   build-node:
+    needs: verify-version
     name: Build node addon (${{ matrix.settings.target }})
     runs-on: ${{ matrix.settings.host }}
     strategy:
       fail-fast: false
       matrix:
         settings:
-          - host: macos-latest
+          - host: macos-15-intel
             target: x86_64-apple-darwin
-          - host: macos-latest
+          - host: macos-15
             target: aarch64-apple-darwin
           - host: windows-latest
             target: x86_64-pc-windows-msvc

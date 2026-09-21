@@ -13,7 +13,7 @@ cargo bench
 Run a single benchmark by name (substring match):
 
 ```bash
-cargo bench cold_json_to_proto
+cargo bench free_global_lru_json_to_proto
 ```
 
 HTML reports (plots, statistics, regression vs. the previous run) are written to
@@ -30,22 +30,25 @@ payload (`sample_json`). Each benchmark isolates one direction of conversion.
 
 | Benchmark | Direction | Path |
 | --- | --- | --- |
-| `cold_json_to_proto` | JSON → Protobuf | Decodes the descriptor set on every call (`json_to_protobuf_bytes`) |
-| `hot_json_to_proto` | JSON → Protobuf | Reuses a pre-built `DescriptorResolver` (`*_with_descriptor_owned`) |
-| `cold_proto_to_json` | Protobuf → JSON | Decodes the descriptor set on every call (`protobuf_to_json_string`) |
-| `hot_proto_to_json` | Protobuf → JSON | Reuses a pre-built `DescriptorResolver` (`*_with_descriptor_owned`) |
-| `compile_proto_from_sources` | `.proto` sources → descriptor set | In-memory compilation (`compile_proto_from_sources`) |
+| `free_global_lru_json_to_proto` | JSON → Protobuf | Free function with a warmed global LRU |
+| `hot_json_to_proto` | JSON → Protobuf | Reuses a pre-built `DescriptorResolver` |
+| `free_global_lru_proto_to_json` | Protobuf → JSON | Free function with a warmed global LRU |
+| `hot_proto_to_json` | Protobuf → JSON | Reuses a pre-built `DescriptorResolver` |
+| `compile_proto_from_sources` | `.proto` sources → descriptor set | In-memory compilation |
 
-### Cold vs. hot
+These use the small fixture. The large-descriptor group creates 10,000 padding
+messages and measures three separate paths:
 
-- **Cold** paths reflect a one-shot call where the descriptor pool must be
-  decoded from the descriptor-set bytes for each conversion.
-- **Hot** paths reflect a steady-state loop where the descriptor is resolved
-  once (via `DescriptorResolver`) and reused, isolating the cost of the
-  serialization/deserialization itself.
+| Benchmark | What it measures |
+| --- | --- |
+| `large_descriptor/decode_pool` | A genuinely cold `DescriptorPool::decode` |
+| `large_descriptor/free_global_lru_hit` | Free-function conversion after warming the LRU |
+| `large_descriptor/explicit_cache` | Conversion with a pre-resolved message descriptor |
 
-Comparing the two shows how much of a conversion's cost is descriptor handling
-versus the actual encode/decode work.
+The cold measurement isolates pool decoding; the two warmed measurements include
+conversion of the same small payload. Compare the warmed paths to estimate
+per-call descriptor hashing, lookup and locking costs. No benchmark here clears
+the global LRU before every conversion.
 
 ## Notes
 

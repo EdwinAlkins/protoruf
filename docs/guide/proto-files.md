@@ -105,13 +105,17 @@ descriptor = compile_proto_from_sources(files, root="api/service.proto")
 
 When `True` (the default), every transitively-imported file — including Google
 well-known types — is embedded in the descriptor, making it fully self-contained.
-Set it to `False` for a smaller descriptor that decodes faster, when the consumer
-does not need the embedded imports:
+Set it to `False` only when the root schema has no imports required by the
+consumer, or when another system supplies those dependencies. A descriptor that
+omits an imported message (including a Google well-known type) is **not
+self-contained** and cannot be loaded by protoruf's `DescriptorCache` or free
+conversion functions. For the `api/service.proto` example above, keep the default
+`True`.
 
 ```python
 descriptor = compile_proto_from_sources(
-    files,
-    root="api/service.proto",
+    {"solo.proto": 'syntax = "proto3"; message Item { string id = 1; }'},
+    root="solo.proto",
     include_imports=False,
 )
 ```

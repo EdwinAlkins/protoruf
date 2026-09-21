@@ -4,9 +4,10 @@ The cached conversion path, building a reusable cache, and threading.
 
 ## The cost model
 
-`json_to_protobuf_bytes` and `protobuf_to_json_string` are convenient one-shots, but they
-**decode the descriptor pool on every call** — the dominant cost when converting many messages.
-For hot loops, decode the pool once and reuse the resolved descriptor.
+`json_to_protobuf_bytes` and `protobuf_to_json_string` are convenient one-shots.
+They reuse decoded pools through a process-wide, 64-entry LRU, but hash the descriptor
+bytes and resolve the message type on every call. For hot loops, resolve the message
+descriptor once and reuse it.
 
 ## The cached path
 

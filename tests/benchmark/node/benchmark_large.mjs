@@ -1,4 +1,4 @@
-// Node · large message · free functions (descriptor re-decoded on every call).
+// Node · large message · free functions (global LRU hit after warmup).
 // Run: node --expose-gc tests/benchmark/node/benchmark_large.mjs   (after `npm run build`)
 import {
   protoruf,

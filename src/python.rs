@@ -62,9 +62,8 @@ fn protobuf_to_json<'py>(
 
 /// A reusable, pre-decoded descriptor pool.
 ///
-/// Decoding the descriptor set (`DescriptorPool::decode`) is the dominant cost of
-/// every conversion. Instantiate this once and reuse it across calls to avoid
-/// re-decoding the pool (and re-resolving message descriptors) on every message.
+/// Holds a decoded pool and memoized message descriptors for repeated conversions.
+/// Free functions also reuse pools through a process-wide LRU.
 #[pyclass]
 struct DescriptorCache {
     resolver: DescriptorResolver,

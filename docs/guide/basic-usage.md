@@ -19,8 +19,8 @@ protoruf provides these main functions:
 !!! tip "Converting many messages?"
     For hot loops and long-lived services, use the
     [`DescriptorCache`](advanced.md#1-use-descriptorcache-for-hot-loops) class
-    instead of the free functions — it decodes the descriptor once and is
-    roughly 7–14× faster.
+    when repeated type lookups or global LRU contention matter. The free
+    functions also reuse decoded pools; measure both paths for your workload.
 
 ## Compiling Proto Files
 

@@ -57,6 +57,7 @@ for (const f of ["index.js", "index.d.ts", ...nodeBinaries]) {
   copyFileSync(join(dist, f), join(stage, f));
 }
 copyFileSync(join(root, "npm", "node", "README.md"), join(stage, "README.md"));
+copyFileSync(join(root, "LICENSE"), join(stage, "LICENSE"));
 
 writeFileSync(
   join(stage, "package.json"),
@@ -67,7 +68,7 @@ writeFileSync(
       description: rootPkg.description,
       main: "index.js",
       types: "index.d.ts",
-      files: ["index.js", "index.d.ts", "README.md", ...nodeBinaries],
+      files: ["index.js", "index.d.ts", "README.md", "LICENSE", ...nodeBinaries],
       license: rootPkg.license,
       repository: rootPkg.repository,
       homepage: rootPkg.homepage,

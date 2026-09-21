@@ -2,6 +2,10 @@
 name = "protoruf"
 version = "0.2.0"
 edition = "2024"
+description = "JSON and Protobuf conversion with Python, Node.js, and WebAssembly bindings"
+license = "MIT"
+repository = "https://github.com/EdwinAlkins/protoruf"
+readme = "README.md"
 
 [lib]
 name = "protoruf"

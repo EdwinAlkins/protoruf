@@ -42,7 +42,7 @@ const wire = jsonToProtobuf('{"id":"123","name":"Alice"}', descriptor, "user.Use
 const json = protobufToJson(wire, descriptor, "user.User", /* pretty */ true);
 ```
 
-- `protobufBytes: Uint8Array`, `descriptorBytes: Uint8Array`, `pretty: boolean`, `messageType: string`
+- `protobufBytes: Uint8Array`, `descriptorBytes: Uint8Array`, `messageType: string`, `pretty: boolean`
 - **returns** `string`
 
 ## Supported Protobuf Features

@@ -2,8 +2,7 @@
 """
 Benchmark protoruf vs google.protobuf on LARGE messages.
 
-Free-functions ("cold") variant — uses `json_to_protobuf` / `protobuf_to_json`,
-which **re-decode the descriptor pool on every call**. For the same large message
+Free-functions variant — uses the process-wide LRU after warmup. For the same large message
 **with** `DescriptorCache` (pool decoded once), see `benchmark_large_hot_loop.py`.
 
 It uses a dedicated schema, `proto/large.proto` (`bench.Dataset`): a fixed number

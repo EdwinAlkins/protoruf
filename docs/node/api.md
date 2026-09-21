@@ -104,9 +104,9 @@ function protobufToJson(
 
 ## `class DescriptorCache`
 
-A reusable, pre-decoded descriptor pool. The free functions decode the descriptor set on
-**every** call; `DescriptorCache` decodes the pool once and reuses it, the dominant performance
-lever for hot loops. Build one and reuse it everywhere.
+A reusable, pre-decoded descriptor pool. Free functions reuse pools through a
+process-wide LRU, but hash the descriptor bytes and resolve the message type
+on each call. Build one `DescriptorCache` for repeated conversions.
 
 ```ts
 class DescriptorCache {

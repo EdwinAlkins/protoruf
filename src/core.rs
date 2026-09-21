@@ -94,8 +94,8 @@ pub fn compile_proto_from_sources(
 
     let mut compiler = Compiler::with_file_resolver(resolver);
     // When true, transitively-imported files (and well-known types) are embedded so
-    // the descriptor set is self-contained. When false, the output is smaller and
-    // decodes faster for callers that do not need Google well-known types.
+    // the descriptor set is self-contained. When false, imports are omitted;
+    // DescriptorPool::decode cannot load a root that references missing imports.
     compiler.include_imports(include_imports);
     compiler
         .open_file(root)
@@ -520,6 +520,47 @@ mod tests {
         let result: JsonValue = serde_json::from_str(&json).unwrap();
         assert_eq!(result["id"], "123");
         assert_eq!(result["tags"], serde_json::json!(["a", "b"]));
+    }
+
+    #[test]
+    fn test_compile_from_sources_without_imports_is_usable_without_dependencies() {
+        let files = HashMap::from([(
+            "solo.proto".to_string(),
+            r#"syntax = "proto3"; package solo; message Item { string id = 1; }"#.to_string(),
+        )]);
+        let descriptor = compile_proto_from_sources(files, "solo.proto", false).unwrap();
+        let pb = json_to_protobuf_bytes(r#"{"id":"x"}"#, &descriptor, "solo.Item").unwrap();
+        let json = protobuf_to_json_string(&pb, &descriptor, "solo.Item", false).unwrap();
+        assert_eq!(serde_json::from_str::<JsonValue>(&json).unwrap()["id"], "x");
+    }
+
+    #[test]
+    fn test_compile_from_sources_without_imports_needs_external_dependencies() {
+        let files = HashMap::from([
+            (
+                "common.proto".to_string(),
+                r#"syntax = "proto3"; package common; message Id { string value = 1; }"#
+                    .to_string(),
+            ),
+            (
+                "user.proto".to_string(),
+                r#"syntax = "proto3"; package user; import "common.proto"; message User { common.Id id = 1; }"#
+                    .to_string(),
+            ),
+        ]);
+        let descriptor = compile_proto_from_sources(files, "user.proto", false).unwrap();
+        assert!(load_descriptor_pool(&descriptor).is_err());
+    }
+
+    #[test]
+    fn test_compile_from_sources_without_imports_needs_google_dependency() {
+        let files = HashMap::from([(
+            "event.proto".to_string(),
+            r#"syntax = "proto3"; package ev; import "google/protobuf/timestamp.proto"; message Event { google.protobuf.Timestamp at = 1; }"#
+                .to_string(),
+        )]);
+        let descriptor = compile_proto_from_sources(files, "event.proto", false).unwrap();
+        assert!(load_descriptor_pool(&descriptor).is_err());
     }
 
     #[test]
