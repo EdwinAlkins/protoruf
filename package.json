@@ -1,0 +1,62 @@
+{
+  "name": "@protoruf/node",
+  "version": "0.2.0",
+  "description": "High-performance JSON <-> Protobuf conversion, powered by Rust (Node.js native addon)",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/EdwinAlkins/protoruf.git"
+  },
+  "homepage": "https://github.com/EdwinAlkins/protoruf",
+  "bugs": {
+    "url": "https://github.com/EdwinAlkins/protoruf/issues"
+  },
+  "keywords": [
+    "protobuf",
+    "json",
+    "rust",
+    "napi",
+    "serialization"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "napi": {
+    "name": "protoruf",
+    "triples": {
+      "defaults": true,
+      "additional": [
+        "aarch64-apple-darwin",
+        "aarch64-unknown-linux-gnu",
+        "x86_64-unknown-linux-gnu",
+        "x86_64-pc-windows-msvc"
+      ]
+    }
+  },
+  "scripts": {
+    "build": "napi build dist --platform --release --features node --dts index.d.ts",
+    "build:debug": "napi build dist --platform --features node --dts index.d.ts",
+    "build:wasm": "wasm-pack build --target nodejs --out-dir dist/wasm -- --features wasm",
+    "build:wasm-web": "wasm-pack build --target web --out-dir dist/wasm-web -- --features wasm",
+    "build:js": "npm run build:debug && npm run build:wasm",
+    "pretest:js": "npm run build:js",
+    "test:js": "vitest run",
+    "artifacts": "napi artifacts",
+    "prepublishOnly": "napi prepublish -t npm",
+    "version": "napi version",
+    "prepare:wasm": "node scripts/prepare-npm-wasm.mjs dist/wasm-web",
+    "pack:wasm": "wasm-pack build --target web --out-dir dist/wasm-web --release -- --features wasm && npm run prepare:wasm",
+    "pack:github": "npm run build && npm run pack:wasm && node scripts/pack-github.mjs"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^2.18.4",
+    "protobufjs": "^8.6.4",
+    "vitest": "^2.1.9"
+  },
+  "files": [
+    "dist/index.js",
+    "dist/index.d.ts"
+  ]
+}

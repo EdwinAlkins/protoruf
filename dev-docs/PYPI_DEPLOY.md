@@ -39,7 +39,7 @@ If using this method, update the `publish` job in `.github/workflows/publish-pyp
 
 ```yaml
   publish:
-    needs: [linux, windows, macos, sdist]
+    needs: [wheels, sdist]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -51,73 +51,37 @@ If using this method, update the `publish` job in `.github/workflows/publish-pyp
 
 ## Release Process
 
-### 1. Update the version
+### 1. Prepare the version
 
-Update the version in both files:
-
-- `Cargo.toml`:
-  ```toml
-  [package]
-  name = "protoruf"
-  version = "0.1.2"  # ← update here
-  ```
-
-- `pyproject.toml`:
-  ```toml
-  [project]
-  name = "protoruf"
-  version = "0.1.2"  # ← update here
-  ```
-
-### 2. Commit and push
+Update `Cargo.toml`, `Cargo.lock`, `pyproject.toml`, `package.json`,
+`package-lock.json`, and `python/protoruf/__init__.py` to the same version. Add the release notes to
+`CHANGELOG.md`. Before tagging, run:
 
 ```bash
-cargo clean && cargo generate-lockfile
-git add Cargo.toml Cargo.lock pyproject.toml
-git commit -m "bump version to 0.1.0"
-git push
+python3 scripts/check-release-version.py v0.2.0
+cargo test --locked
+uv run pytest
 ```
 
-### 3. Run checks locally
+Replace `v0.2.0` with the version being published.
+
+### 2. Push the tag
 
 ```bash
-# Python tests
-uv run pytest tests/ -v
-
-# Rust tests
-cargo test --lib
-
-# Type checking
-uv run mypy python/protoruf/ --ignore-missing-imports
-
-# Build verification
-uv run maturin develop
+git tag v0.2.0
+git push origin v0.2.0
 ```
 
-### 4. Create a Git tag and release
+A tag push starts both release workflows independently. `release.yml` builds
+the Node and WASM tarballs and attaches them to a GitHub Release.
+`publish-pypi.yml` builds the Python wheels and sdist, then publishes them
+through PyPI trusted publishing. The PyPI workflow no longer waits for a
+`release: published` event created by the GitHub workflow's `GITHUB_TOKEN`.
 
-```bash
-git tag v0.1.0
-git push origin v0.1.0
-```
-
-Then go to GitHub → your repo → **Releases** → **Draft a new release**:
-
-- **Tag**: `v0.1.0`
-- **Title**: `v0.1.0`
-- **Description**: changelog/release notes
-- Click **Publish release**
-
-This triggers the GitHub Actions workflow automatically.
-
-### 5. Monitor the workflow
-
-Go to **Actions** tab in your GitHub repo → click on the running workflow → check each job completes successfully.
-
-Once done, the package will be available on PyPI at:
-```
-https://pypi.org/project/protoruf/
-```
+Both workflows reject a tag that disagrees with package versions. Watch their
+jobs under GitHub Actions. The PyPI workflow builds CPython 3.12, 3.13, and
+3.14 wheels for Linux x86_64, Windows x64, macOS Intel, and macOS arm64 using
+the Cargo `dist` profile.
 
 ## Building wheels locally
 
@@ -130,7 +94,7 @@ uv pip install maturin
 ### Build for your current platform
 
 ```bash
-maturin build --release
+maturin build --profile dist
 ```
 
 Wheels will be in `target/wheels/`.
@@ -138,7 +102,7 @@ Wheels will be in `target/wheels/`.
 ### Build a source distribution
 
 ```bash
-maturin build --release --sdist
+maturin sdist
 ```
 
 ### Test a wheel locally
@@ -154,7 +118,7 @@ The workflow builds wheels for:
 
 | Platform | Architectures |
 |----------|---------------|
-| Linux    | x86_64, aarch64 |
+| Linux    | x86_64 |
 | Windows  | x64 |
 | macOS    | x86_64 (Intel), aarch64 (Apple Silicon) |
 
@@ -163,7 +127,7 @@ The workflow builds wheels for:
 ### Build fails on a specific platform
 
 - Check that all Rust dependencies compile for that target
-- Run `maturin build --release --target <target>` locally to reproduce
+- Run `maturin build --profile dist --target <target>` locally to reproduce
 
 ### PyPI rejects the upload
 

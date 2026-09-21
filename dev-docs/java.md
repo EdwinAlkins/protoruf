@@ -48,7 +48,7 @@ transposables** :
 ```rust
 pub fn compile_proto(proto_path: &str, include_paths: Option<Vec<String>>) -> Result<Vec<u8>, String>;
 pub fn json_to_protobuf_bytes(json_str: &str, descriptor_bytes: &[u8], message_type: &str) -> Result<Vec<u8>, String>;
-pub fn protobuf_to_json_string(protobuf_bytes: &[u8], descriptor_bytes: &[u8], pretty: bool, message_type: &str) -> Result<String, String>;
+pub fn protobuf_to_json_string(protobuf_bytes: &[u8], descriptor_bytes: &[u8], message_type: &str, pretty: bool) -> Result<String, String>;
 // + load_descriptor_pool / get_message_descriptor / *_with_descriptor (cf. DescriptorCache)
 ```
 
@@ -168,10 +168,10 @@ pub fn json_to_protobuf(json_str: String, descriptor_bytes: Vec<u8>, message_typ
 }
 
 #[export]
-pub fn protobuf_to_json(protobuf_bytes: Vec<u8>, descriptor_bytes: Vec<u8>, pretty: bool, message_type: String)
+pub fn protobuf_to_json(protobuf_bytes: Vec<u8>, descriptor_bytes: Vec<u8>, message_type: String, pretty: bool)
     -> Result<String, ProtorufError>
 {
-    core::protobuf_to_json_string(&protobuf_bytes, &descriptor_bytes, pretty, &message_type)
+    core::protobuf_to_json_string(&protobuf_bytes, &descriptor_bytes, &message_type, pretty)
         .map_err(ProtorufError::Decode)
 }
 ```
@@ -289,7 +289,7 @@ public final class Protoruf {
     public static native byte[] jsonToProtobuf(String jsonStr, byte[] descriptorBytes, String messageType);
 
     /** Protobuf -> JSON. */
-    public static native String protobufToJson(byte[] protobufBytes, byte[] descriptorBytes, boolean pretty, String messageType);
+    public static native String protobufToJson(byte[] protobufBytes, byte[] descriptorBytes, String messageType, boolean pretty);
 }
 
 /** Pool de descripteurs pré-décodé et réutilisable (objet opaque, à fermer). */
@@ -312,7 +312,7 @@ import com.protoruf.*;
 byte[] descriptor = Protoruf.compileProto("schema.proto", null);
 
 byte[] pb = Protoruf.jsonToProtobuf("{\"id\":\"123\"}", descriptor, "user.User");
-String json = Protoruf.protobufToJson(pb, descriptor, false, "user.User");
+String json = Protoruf.protobufToJson(pb, descriptor, "user.User", false);
 
 // Chemin haute-performance : réutiliser le pool décodé
 try (DescriptorCache cache = new DescriptorCache(descriptor)) {
@@ -367,7 +367,7 @@ public final class ProtorufMapper {
     /** Protobuf -> objet typé `T` (validé/mappé par Jackson). */
     public static <T> T protobufToObject(byte[] protobuf, byte[] descriptor, Class<T> type, String messageType) {
         try {
-            String json = Protoruf.protobufToJson(protobuf, descriptor, false, messageType);
+            String json = Protoruf.protobufToJson(protobuf, descriptor, messageType, false);
             return MAPPER.readValue(json, type);      // mapping + validation de forme
         } catch (JsonProcessingException e) {
             throw new ProtorufException("désérialisation JSON échouée", e);
@@ -544,7 +544,7 @@ class ConversionTest {
         byte[] desc = Protoruf.compileProtoFromSources(
             new String[]{"user.proto"}, new String[]{PROTO}, "user.proto");
         byte[] pb = Protoruf.jsonToProtobuf("{\"id\":\"123\",\"tags\":[\"a\",\"b\"]}", desc, "user.User");
-        String json = Protoruf.protobufToJson(pb, desc, false, "user.User");
+        String json = Protoruf.protobufToJson(pb, desc, "user.User", false);
         assertTrue(json.contains("\"id\":\"123\""));
     }
 

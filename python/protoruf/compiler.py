@@ -56,3 +56,33 @@ def load_descriptor(descriptor_path: str| Path) -> bytes:
         FileNotFoundError: If the descriptor file does not exist
     """
     return Path(descriptor_path).read_bytes()
+
+
+def compile_proto_from_sources(
+    files: dict[str, str],
+    root: str,
+    include_imports: bool = True,
+    output_path: str | Path | None = None,
+) -> bytes:
+    """
+    Compile .proto sources held in memory (no filesystem access).
+
+    Args:
+        files: Mapping filename -> source content (e.g. {"user.proto": "..."})
+        root: Entry file name (e.g. "user.proto")
+        include_imports: Embed imported protos in the descriptor set
+        output_path: Optional path to save the descriptor set
+
+    Returns:
+        Compiled descriptor set as bytes
+    """
+    descriptor_bytes = _protoruf.compile_proto_from_sources(
+        files, root, include_imports
+    )
+
+    if output_path:
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(descriptor_bytes)
+
+    return descriptor_bytes

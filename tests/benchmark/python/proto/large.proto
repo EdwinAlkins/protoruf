@@ -1,0 +1,39 @@
+// Schema for the large-message benchmark (~1 MB payloads).
+//
+// Unlike the small `tests/proto/message.proto`, this is built to scale: a
+// `Dataset` holds thousands of `Record`s, each exercising the full machinery —
+// scalars, an enum, a repeated field, a map, and a nested message with a vector
+// of doubles. At ~1 MB the payload conversion itself dominates, which is exactly
+// where a Rust core has the most to gain over pure Python.
+
+syntax = "proto3";
+
+package bench;
+
+enum Status {
+  STATUS_UNKNOWN = 0;
+  STATUS_ACTIVE = 1;
+  STATUS_ARCHIVED = 2;
+}
+
+// A dense numeric vector (e.g. an embedding).
+message Vector {
+  repeated double values = 1;
+}
+
+message Record {
+  string id = 1;
+  string name = 2;
+  Status status = 3;
+  int64 timestamp = 4;
+  repeated string tags = 5;
+  map<string, string> attributes = 6;
+  Vector embedding = 7;
+}
+
+message Dataset {
+  string dataset_id = 1;
+  string description = 2;
+  repeated Record records = 3;
+  map<string, string> metadata = 4;
+}
