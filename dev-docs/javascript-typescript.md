@@ -62,7 +62,7 @@ L'interface Python actuelle (`python/protoruf/`) :
 | `compile_proto(proto_path, include_paths=None, output_path=None)` | Rust `compile_proto` + wrapper Python | lit le système de fichiers |
 | `load_descriptor(path)` | Python pur | lecture de fichier |
 | `json_to_protobuf(json_str, descriptor_bytes, message_type)` | Rust | |
-| `protobuf_to_json(protobuf_bytes, descriptor_bytes, pretty=False, message_type=...)` | Rust | |
+| `protobuf_to_json(protobuf_bytes, descriptor_bytes, message_type=..., pretty=False)` | Rust | |
 | `pydantic_to_protobuf(model, descriptor_bytes, message_type)` | Python pur (`model_dump_json` + Rust) | |
 | `protobuf_to_pydantic(bytes, descriptor_bytes, model_class, message_type)` | Python pur (Rust + `model_validate_json`) | |
 | `DescriptorCache(descriptor_bytes)` → `.json_to_protobuf(...)`, `.protobuf_to_json(...)` | Rust `#[pyclass]` | pool pré-décodé réutilisable |
@@ -181,8 +181,8 @@ pub fn json_to_protobuf(json_str: String, descriptor_bytes: &[u8], message_type:
 }
 
 #[napi]
-pub fn protobuf_to_json(protobuf_bytes: &[u8], descriptor_bytes: &[u8], pretty: Option<bool>, message_type: String) -> napi::Result<String> {
-    core::protobuf_to_json_string(protobuf_bytes, descriptor_bytes, pretty.unwrap_or(false), &message_type)
+pub fn protobuf_to_json(protobuf_bytes: &[u8], descriptor_bytes: &[u8], message_type: String, pretty: Option<bool>) -> napi::Result<String> {
+    core::protobuf_to_json_string(protobuf_bytes, descriptor_bytes, &message_type, pretty.unwrap_or(false))
         .map_err(|e| napi::Error::from_reason(e))
 }
 
@@ -236,8 +236,8 @@ pub fn json_to_protobuf(json_str: &str, descriptor_bytes: &[u8], message_type: &
 }
 
 #[wasm_bindgen]
-pub fn protobuf_to_json(protobuf_bytes: &[u8], descriptor_bytes: &[u8], pretty: bool, message_type: &str) -> Result<String, JsError> {
-    core::protobuf_to_json_string(protobuf_bytes, descriptor_bytes, pretty, message_type)
+pub fn protobuf_to_json(protobuf_bytes: &[u8], descriptor_bytes: &[u8], message_type: &str, pretty: Option<bool>) -> Result<String, JsError> {
+    core::protobuf_to_json_string(protobuf_bytes, descriptor_bytes, message_type, pretty.unwrap_or(false))
         .map_err(|e| JsError::new(&e))
 }
 
@@ -444,16 +444,16 @@ export function jsonToProtobuf(jsonStr: string, descriptorBytes: Uint8Array, mes
  * @param protobufBytes    Message Protobuf encodé.
  * @param descriptorBytes  Descriptor set issu de {@link compileProto} /
  *                         {@link compileProtoFromSources}.
- * @param pretty           Si `true`, formate le JSON avec indentation (défaut : `false`).
  * @param messageType      Nom pleinement qualifié du message (ex : `"user.User"`).
+ * @param pretty           Si `true`, formate le JSON avec indentation (défaut : `false`).
  * @returns La représentation JSON du message.
  * @throws Si le décodage ou la sérialisation JSON échoue.
  */
 export function protobufToJson(
   protobufBytes: Uint8Array,
   descriptorBytes: Uint8Array,
-  pretty: boolean | undefined,
   messageType: string,
+  pretty?: boolean,
 ): string;
 
 /**
@@ -526,7 +526,7 @@ export function objectToProtobuf<T>(obj: T, descriptor: Uint8Array, messageType:
  * @throws {z.ZodError} Si la donnée décodée ne respecte pas le schéma.
  */
 export function protobufToObject<T>(bytes: Uint8Array, descriptor: Uint8Array, schema: z.ZodType<T>, messageType: string): T {
-  return schema.parse(JSON.parse(protobufToJson(bytes, descriptor, false, messageType)));
+  return schema.parse(JSON.parse(protobufToJson(bytes, descriptor, messageType, false)));
 }
 ```
 
@@ -730,7 +730,7 @@ import { expect } from "vitest";
 export interface ProtorufApi {
   compileProtoFromSources(files: Record<string, string>, root: string): Uint8Array;
   jsonToProtobuf(json: string, descriptor: Uint8Array, messageType: string): Uint8Array;
-  protobufToJson(bytes: Uint8Array, descriptor: Uint8Array, pretty: boolean, messageType: string): string;
+  protobufToJson(bytes: Uint8Array, descriptor: Uint8Array, messageType: string, pretty: boolean): string;
 }
 
 const PROTO = 'syntax="proto3"; package user; message User { string id = 1; repeated string tags = 2; }';
@@ -740,7 +740,7 @@ export function runConversionSuite(api: ProtorufApi) {
 
   // Round-trip JSON -> Protobuf -> JSON
   const bytes = api.jsonToProtobuf('{"id":"123","tags":["a","b"]}', descriptor, "user.User");
-  const json = JSON.parse(api.protobufToJson(bytes, descriptor, false, "user.User"));
+  const json = JSON.parse(api.protobufToJson(bytes, descriptor, "user.User", false));
   expect(json.id).toBe("123");
   expect(json.tags).toEqual(["a", "b"]);
 

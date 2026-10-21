@@ -1,5 +1,10 @@
 # Migration vers Python 3.14
 
+> Historical planning note: this document describes an older PyO3 migration.
+> The current project uses PyO3 0.29 and tests CPython 3.12, 3.13, and 3.14.
+> Check `Cargo.toml` and the CI workflows for the current support matrix.
+
+
 ## 📋 Vue d'ensemble
 
 Ce document décrit le travail nécessaire pour supporter Python 3.14 dans `protoruf`.

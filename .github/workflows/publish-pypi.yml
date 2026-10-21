@@ -1,61 +1,53 @@
 name: Publish to PyPI
 
 on:
-  release:
-    types: [published]
-  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
 
 jobs:
-  linux:
+  verify-version:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Check tag against package versions
+        run: python scripts/check-release-version.py "${{ github.ref_name }}"
+
+  wheels:
+    needs: verify-version
+    name: Wheel (${{ matrix.os }}, Python ${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-15-intel, macos-15]
+        python-version: ['3.12', '3.13', '3.14']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
       - uses: PyO3/maturin-action@v1
         with:
           command: build
-          args: --release --out dist -i python3.12
+          args: --profile dist --locked --out dist -i python${{ matrix.python-version }}
           manylinux: auto
+      - name: Install and test the built wheel
+        run: |
+          python -m pip install "pydantic>=2.13.4"
+          python -m pip install --no-index --no-deps --find-links dist protoruf
+          python scripts/check-wheel.py
       - uses: actions/upload-artifact@v4
         with:
-          name: wheels-linux-x86_64
-          path: dist
-
-  windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - uses: PyO3/maturin-action@v1
-        with:
-          command: build
-          args: --release --out dist -i python3.12
-      - uses: actions/upload-artifact@v4
-        with:
-          name: wheels-windows-x86_64
-          path: dist
-
-  macos:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - uses: PyO3/maturin-action@v1
-        with:
-          command: build
-          args: --release --out dist -i python3.12
-      - uses: actions/upload-artifact@v4
-        with:
-          name: wheels-macos-x86_64
-          path: dist
+          name: wheels-${{ matrix.os }}-py${{ matrix.python-version }}
+          path: dist/*.whl
+          if-no-files-found: error
 
   sdist:
+    needs: verify-version
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -66,10 +58,11 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: wheels-sdist
-          path: dist
+          path: dist/*.tar.gz
+          if-no-files-found: error
 
   publish:
-    needs: [linux, windows, macos, sdist]
+    needs: [wheels, sdist]
     runs-on: ubuntu-latest
     environment:
       name: pypi

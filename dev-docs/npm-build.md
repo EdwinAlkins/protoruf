@@ -44,7 +44,7 @@ const desc = compileProtoFromSources(
   "user.proto",
 );
 const pb = jsonToProtobuf('{"id":"123"}', desc, "user.User");
-console.log(protobufToJson(pb, desc, false, "user.User")); // {"id":"123"}
+console.log(protobufToJson(pb, desc, "user.User", false)); // {"id":"123"}
 ```
 
 > `compile_proto` (lecture disque) **est** exposé côté Node ; le navigateur (WASM) ne l'a pas.

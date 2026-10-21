@@ -2,254 +2,121 @@
 
 <p align="center">
   <img src="docs/assets/logo.png" alt="protoruf logo" width="200">
+  <img src="docs/assets/logo_js.png" alt="protoruf logo" width="200">
 </p>
 
 <p align="center">
-  <strong>High-performance JSON ↔ Protobuf conversion for Python, powered by Rust</strong>
+  <strong>High-performance JSON ↔ Protobuf conversion, powered by Rust —<br>for Python, Node.js, the browser (WASM) and Rust.</strong>
 </p>
 
 <p align="center">
   <a href="https://EdwinAlkins.github.io/protoruf/">📖 Documentation</a> •
   <a href="https://github.com/EdwinAlkins/protoruf">💻 Source</a> •
-  <a href="https://pypi.org/project/protoruf/">📦 PyPI</a>
+  <a href="https://pypi.org/project/protoruf/">📦 PyPI</a> •
+  <a href="https://github.com/EdwinAlkins/protoruf/releases">📦 Releases (node &amp; wasm)</a>
 </p>
 
 ---
 
-A high-performance Python library written in Rust for converting between JSON and Protobuf messages.
+protoruf converts between **JSON and Protobuf** dynamically — no `protoc`, no generated
+classes. You compile a `.proto` to a descriptor once, then convert in both directions at
+Rust speed.
+
+A single **pure-Rust core** (`src/core.rs`) powers every target through a thin binding
+layer, so the conversion logic is shared, never duplicated:
+
+| Target | Package | Install | Docs |
+|---|---|---|---|
+| **Python** | [`protoruf`](https://pypi.org/project/protoruf/) | `pip install protoruf` | [Python guide](https://EdwinAlkins.github.io/protoruf/) |
+| **Node.js** | `@protoruf/node` | [GitHub Releases](https://github.com/EdwinAlkins/protoruf/releases) by URL — npm coming soon | [Node guide](https://EdwinAlkins.github.io/protoruf/) |
+| **Browser (WASM)** | `@protoruf/wasm` | [GitHub Releases](https://github.com/EdwinAlkins/protoruf/releases) by URL — npm coming soon | [Browser guide](https://EdwinAlkins.github.io/protoruf/) |
+| **Rust** | `protoruf` core crate | — | [Rust guide](https://EdwinAlkins.github.io/protoruf/) |
+
+> **Node & browser install (v0.2.0):** the npm registry release is coming soon. For now, grab the prebuilt tarballs from the [Releases page](https://github.com/EdwinAlkins/protoruf/releases) and install by URL:
+> ```bash
+> npm install https://github.com/EdwinAlkins/protoruf/releases/download/v0.2.0/protoruf-node-0.2.0.tgz
+> npm install https://github.com/EdwinAlkins/protoruf/releases/download/v0.2.0/protoruf-wasm-0.2.0.tgz
+> ```
 
 ## Features
 
 - ⚡ Fast JSON ↔ Protobuf conversion powered by Rust
+- 🔁 One shared core, four targets (Python / Node / Browser / Rust)
 - 🔒 Type-safe with explicit message type specification
-- 📦 Built-in proto compilation with Rust protox (no external dependencies!)
+- 📦 Built-in `.proto` compilation via [`protox`](https://crates.io/crates/protox) — no `protoc`, no codegen
+- 🧠 Reusable `DescriptorCache` for high-throughput conversion
 
-## Installation
+## Quick start
 
-```bash
-uv pip install -e .
-```
-
-## Usage
+**Python**
 
 ```python
-from protoruf import json_to_protobuf, protobuf_to_json, compile_proto
-
-# Step 1: Compile your .proto file to a descriptor set (using Rust protox)
-descriptor = compile_proto("proto/message.proto")
-
-# Or save to a file for reuse
-# compile_proto("proto/message.proto", output_path="proto/message.desc")
-# descriptor = load_descriptor("proto/message.desc")
-
-# Step 2: Convert JSON to Protobuf (message_type is required)
-json_data = '{"id": "123", "content": "Hello", "priority": 1, "tags": ["greeting"]}'
-protobuf_bytes = json_to_protobuf(json_data, descriptor, message_type="message.Message")
-
-# Step 3: Convert Protobuf back to JSON (message_type is required)
-json_str = protobuf_to_json(protobuf_bytes, descriptor, message_type="message.Message", pretty=True)
-print(json_str)
-```
-
-### Direct Pydantic Integration
-
-protoruf provides built-in functions for seamless Pydantic model conversion:
-
-```python
-from pydantic import BaseModel, Field
-from protoruf import compile_proto, pydantic_to_protobuf, protobuf_to_pydantic
-
-# Define your models
-class Message(BaseModel):
-    id: str = ""
-    content: str = ""
-    priority: int = 0
-    tags: list[str] = []
-
-# Compile proto
-descriptor = compile_proto("proto/message.proto")
-
-# Create a Pydantic model
-msg = Message(id="123", content="Hello", priority=1, tags=["greeting"])
-
-# Convert directly from Pydantic to Protobuf (message_type is required)
-protobuf_bytes = pydantic_to_protobuf(msg, descriptor, message_type="message.Message")
-
-# Convert Protobuf back to Pydantic model
-result = protobuf_to_pydantic(protobuf_bytes, descriptor, Message, message_type="message.Message")
-print(result.content)  # Output: Hello
-```
-
-### With Pydantic models (in your own code)
-
-You can use Pydantic models in your application code to structure your data:
-
-```python
-from pydantic import BaseModel, Field
 from protoruf import compile_proto, json_to_protobuf, protobuf_to_json
 
-# Define your own models in your project
-class Metadata(BaseModel):
-    author: str = ""
-    created_at: int = 0
-    attributes: dict[str, str] = {}
-
-class Message(BaseModel):
-    id: str = ""
-    content: str = ""
-    priority: int = 0
-    tags: list[str] = []
-    metadata: Metadata = None
-
-# Compile your proto file
-descriptor = compile_proto("proto/message.proto")
-
-# Create a message using Pydantic
-msg = Message(
-    id="123",
-    content="Hello",
-    priority=1,
-    tags=["greeting"],
-    metadata=Metadata(author="Alice")
-)
-
-# Convert to Protobuf (message_type is required)
-protobuf_bytes = json_to_protobuf(msg.model_dump_json(), descriptor, message_type="message.Message")
-
-# Convert back to JSON
-result = protobuf_to_json(protobuf_bytes, descriptor, message_type="message.Message")
+descriptor = compile_proto("message.proto")
+pb = json_to_protobuf('{"id": "123"}', descriptor, message_type="message.Message")
+print(protobuf_to_json(pb, descriptor, message_type="message.Message", pretty=True))
 ```
 
-## Examples
+**Node.js**
 
-See the `examples/` directory for more usage examples:
+```js
+import { compileProto, jsonToProtobuf, protobufToJson } from "@protoruf/node";
 
-- `01_basic_user_example.py` - Basic user service example
-- `02_ecommerce_example.py` - E-commerce order example
-- `03_iot_sensors_example.py` - IoT sensors data example
-- `04_pydantic_integration.py` - Pydantic integration example
+const descriptor = compileProto("message.proto");
+const pb = jsonToProtobuf('{"id":"123"}', descriptor, "message.Message");
+console.log(protobufToJson(pb, descriptor, "message.Message", true));
+```
+
+**Browser (WASM)**
+
+```js
+import init, { compileProtoFromSources, jsonToProtobuf } from "@protoruf/wasm";
+
+await init();                                   // load & instantiate the .wasm
+const descriptor = compileProtoFromSources(
+  { "message.proto": 'syntax="proto3"; package message; message Message { string id = 1; }' },
+  "message.proto",
+);
+const pb = jsonToProtobuf('{"id":"123"}', descriptor, "message.Message");
+```
+
+> `compileProto(path)` reads the filesystem — available in Python and Node only. In the
+> browser there is no filesystem, so compile from in-memory sources with
+> `compileProtoFromSources`.
+
+See the full guides in the [documentation](https://EdwinAlkins.github.io/protoruf/) and runnable
+samples under [`examples/`](examples/) (Python) and [`examples/js/`](examples/js/) (Node, WASM, browser).
+
+## Architecture
+
+```
+src/
+├── core.rs     # pure-Rust engine: .proto compilation, JSON ↔ Protobuf, descriptor pool
+├── lib.rs      # module hub (feature-gated bindings)
+├── python.rs   # PyO3 binding        (feature "python")  -> CPython extension
+├── node.rs     # napi-rs binding     (feature "node")    -> Node.js .node addon
+└── wasm.rs     # wasm-bindgen binding (feature "wasm")   -> .wasm + JS glue
+```
+
+Each binding only translates types & errors around `core::*`; building one target never
+pulls in another's dependencies. Design notes for each binding live in [`dev-docs/`](dev-docs/).
 
 ## Development
 
 ```bash
-# Install dependencies
-uv sync --group benchmark --group docs
+# Rust core
+cargo test --lib
 
-# Build the Rust extension
+# Python (maturin reads features = ["python"] from pyproject.toml)
+uv sync --group dev
 uv run maturin develop
-
-# Run Python tests
 uv run pytest
 
-# Run Rust tests
-cargo test --lib
-
-# Type checking with mypy
-uv run mypy python/protoruf/ --ignore-missing-imports
-
-# Run all checks (tests + type checking)
-uv run pytest && cargo test --lib && uv run mypy python/protoruf/ --ignore-missing-imports
+# JS/TS bindings (Node + WASM), see dev-docs/npm-build.md
+npm install
+npm run test:js            # rebuilds the napi + wasm bindings, then runs Vitest
 ```
-
-### Pre-commit checklist
-
-Before committing, make sure all checks pass:
-
-```bash
-# 1. Python tests
-uv run pytest tests/ -v
-
-# 2. Rust tests
-cargo test --lib
-
-# 3. Type checking
-uv run mypy python/protoruf/ --ignore-missing-imports
-
-# 4. Build verification
-uv run maturin develop
-```
-
-## Project Structure
-
-```
-rust-json-probuff/
-├── python/protoruf/           # Python package
-│   ├── __init__.py             # Main API: json_to_protobuf, protobuf_to_json
-│   ├── _protoruf.pyi          # Type stubs for Rust extension
-│   ├── compiler.py             # Proto compilation utilities
-│   └── py.typed                # PEP 561 marker
-├── src/                        # Rust source code
-│   ├── core.rs                 # Core logic (pure Rust, testable)
-│   └── lib.rs                  # Python bindings (PyO3)
-├── tests/                      # Python test suite
-│   ├── proto/                  # Test proto files
-│   ├── test_models.py          # Pydantic models for tests
-│   └── test_rust_json_probuff.py
-├── examples/                   # Usage examples with their own .proto files
-└── doc/                        # Documentation
-```
-
-## API Reference
-
-### `compile_proto(proto_path, include_paths=None, output_path=None)`
-
-Compile a `.proto` file to a descriptor set.
-
-- **proto_path**: Path to the `.proto` file
-- **include_paths**: Optional list of include paths for imports
-- **output_path**: Optional path to save the descriptor set
-
-Returns the descriptor set as bytes.
-
-### `load_descriptor(descriptor_path)`
-
-Load a pre-compiled descriptor set from a file.
-
-- **descriptor_path**: Path to the `.desc` file
-
-Returns the descriptor set as bytes.
-
-### `json_to_protobuf(json_str, descriptor_bytes, message_type)`
-
-Convert a JSON string to a Protobuf message.
-
-- **json_str**: JSON string to convert
-- **descriptor_bytes**: Compiled protobuf descriptor set
-- **message_type**: Full message type name (e.g., `"user.User"`, `"ecommerce.Order"`)
-
-Returns the Protobuf message as bytes.
-
-### `protobuf_to_json(protobuf_bytes, descriptor_bytes, message_type, pretty=False)`
-
-Convert a Protobuf message to a JSON string.
-
-- **protobuf_bytes**: Protobuf message as bytes
-- **descriptor_bytes**: Compiled protobuf descriptor set
-- **message_type**: Full message type name (e.g., `"user.User"`, `"ecommerce.Order"`)
-- **pretty**: If `True`, format JSON with indentation
-
-Returns the JSON string representation.
-
-### `pydantic_to_protobuf(pydantic_model, descriptor_bytes, message_type)`
-
-Convert a Pydantic model directly to a Protobuf message.
-
-- **pydantic_model**: Pydantic model instance to convert
-- **descriptor_bytes**: Compiled protobuf descriptor set
-- **message_type**: Full message type name (e.g., `"user.User"`, `"ecommerce.Order"`)
-
-Returns the Protobuf message as bytes.
-
-### `protobuf_to_pydantic(protobuf_bytes, descriptor_bytes, model_class, message_type)`
-
-Convert a Protobuf message directly to a Pydantic model instance.
-
-- **protobuf_bytes**: Protobuf message as bytes
-- **descriptor_bytes**: Compiled protobuf descriptor set
-- **model_class**: The Pydantic model class to instantiate
-- **message_type**: Full message type name (e.g., `"user.User"`)
-
-Returns an instance of the specified Pydantic model class.
 
 ## License
 

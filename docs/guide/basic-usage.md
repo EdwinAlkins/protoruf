@@ -4,12 +4,13 @@ This guide covers the core functionality of protoruf: converting between JSON an
 
 ## Core Functions
 
-protoruf provides six main functions:
+protoruf provides these main functions:
 
 | Function | Description |
 |----------|-------------|
 | `compile_proto()` | Compile a `.proto` file to a descriptor |
 | `load_descriptor()` | Load a pre-compiled descriptor from a file |
+| `compile_proto_from_sources()` | Compile a set of `.proto` files provided in memory (no filesystem access) |
 | `json_to_protobuf()` | Convert JSON string to Protobuf bytes |
 | `protobuf_to_json()` | Convert Protobuf bytes to JSON string |
 | `pydantic_to_protobuf()` | Convert Pydantic model directly to Protobuf bytes |
@@ -18,8 +19,8 @@ protoruf provides six main functions:
 !!! tip "Converting many messages?"
     For hot loops and long-lived services, use the
     [`DescriptorCache`](advanced.md#1-use-descriptorcache-for-hot-loops) class
-    instead of the free functions — it decodes the descriptor once and is
-    roughly 7–14× faster.
+    when repeated type lookups or global LRU contention matter. The free
+    functions also reuse decoded pools; measure both paths for your workload.
 
 ## Compiling Proto Files
 
@@ -31,6 +32,33 @@ from protoruf import compile_proto
 # Compile and get descriptor in memory
 descriptor = compile_proto("schema.proto")
 ```
+
+### Compiling From In-Memory Sources
+
+If your `.proto` definitions are not on disk (generated at runtime, fetched over
+the network, stored in a database…), use `compile_proto_from_sources()`. It takes
+a mapping of filename → source text and compiles entirely in memory, with **no
+filesystem access**:
+
+```python
+from protoruf import compile_proto_from_sources
+
+files = {
+    "user.proto": """
+syntax = "proto3";
+package user;
+message User { string id = 1; string email = 2; }
+""",
+}
+
+# Compile and get descriptor in memory
+descriptor = compile_proto_from_sources(files, root="user.proto")
+```
+
+The returned descriptor is identical to what `compile_proto()` would produce for
+the same sources, so it works the same way with every conversion function. See
+[Proto Files & Compilation](proto-files.md#compiling-from-in-memory-sources) for
+imports and options.
 
 ### Saving Descriptors
 
