@@ -47,9 +47,10 @@ jobs:
             target: x86_64-pc-windows-msvc
           - host: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-          - host: ubuntu-latest
+          # Native ARM runner: zig cross-linking rejects the
+          # `--fix-cortex-a53-843419` flag that recent rustc passes on aarch64.
+          - host: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
-            zig: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -58,11 +59,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.settings.target }}
-      - name: Setup zig (cross-compile aarch64 linux)
-        if: ${{ matrix.settings.zig }}
-        uses: goto-bus-stop/setup-zig@v2
-        with:
-          version: 0.13.0
       - name: Install dependencies
         run: npm ci
       - name: Build
@@ -70,8 +66,7 @@ jobs:
         run: |
           npx napi build dist \
             --platform --release --features node --dts index.d.ts \
-            --target ${{ matrix.settings.target }} \
-            ${{ matrix.settings.zig && '--zig' || '' }}
+            --target ${{ matrix.settings.target }}
       - name: Upload native binary
         uses: actions/upload-artifact@v4
         with:
