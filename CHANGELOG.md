@@ -5,7 +5,7 @@ All notable changes to **protoruf** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.3.0] - Pending
+## [0.3.0] - 2026-10-28
 
 ### Added
 
@@ -22,6 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `OpenIntEnum`: an `IntEnum` that keeps undeclared values as cached
   `UNRECOGNIZED_<n>` pseudo-members, matching proto3 open enums.
 
+### Changed
+
+- Proto compile errors include the source location for every binding:
+  `Failed to compile proto file: e.proto:4:3: name 'Missing' is not defined`
+  (the location used to be dropped). The message prefix is unchanged.
+
 ### Fixed
 
 - `protobuf_to_pydantic` no longer reports a required field holding a zero value
@@ -32,6 +38,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   binary data failed to encode (`invalid base64` / invalid UTF-8) and base64 text
   was returned as-is on decode. Models without `bytes` fields keep the direct JSON
   path.
+
+### CI
+
+- `cargo clippy` also runs with the `python` feature, so the Python binding is linted.
+- Standard protos not embedded by protox (`google/rpc`, `google/type`, gRPC health and
+  reflection) are vendored under `third_party/proto/` (Apache-2.0) for the test suite.
 
 ## [0.2.0] - 2026-10-21
 
