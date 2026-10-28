@@ -5,6 +5,25 @@ All notable changes to **protoruf** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `include_default_values` option on `protobuf_to_json` (free function and
+  `DescriptorCache`, Python binding): emits fields without presence even at their
+  default value. Fields with presence (`optional`, messages, `oneof` members) are
+  still emitted only when set. Off by default: the JSON output is unchanged.
+### Fixed
+
+- `protobuf_to_pydantic` no longer reports a required field holding a zero value
+  (`False`, `0`, `""`, empty list/map) as missing: the helpers now request the
+  default values from the JSON conversion.
+- `pydantic_to_protobuf` / `protobuf_to_pydantic` handle `bytes` fields: they are
+  written and read as base64, as the protobuf JSON mapping requires. Previously
+  binary data failed to encode (`invalid base64` / invalid UTF-8) and base64 text
+  was returned as-is on decode. Models without `bytes` fields keep the direct JSON
+  path.
+
 ## [0.2.0] - Pending
 
 ### Added

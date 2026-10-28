@@ -122,7 +122,9 @@ message = cache.protobuf_to_pydantic(protobuf_bytes, Message, "message.Message")
 
 These are thin, pure-Python wrappers over `model_dump_json()` /
 `model_validate_json()` on top of the cached JSON conversions — the descriptor
-pool is still decoded only once.
+pool is still decoded only once. Default values are restored on the way back
+(a required `flag: bool` holding `False` validates), and `bytes` fields are carried
+as base64 without any model configuration.
 
 !!! tip "Prefer the cache"
     Reach for the free functions only for one-off conversions. Any loop or

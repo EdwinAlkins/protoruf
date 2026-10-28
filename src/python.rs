@@ -46,16 +46,26 @@ fn json_to_protobuf<'py>(
 
 /// Convert a Protobuf message (bytes) to a JSON string
 #[pyfunction]
-#[pyo3(signature = (protobuf_bytes, descriptor_bytes, message_type, pretty = false))]
+#[pyo3(signature = (protobuf_bytes, descriptor_bytes, message_type, pretty = false, include_default_values = false))]
 fn protobuf_to_json<'py>(
     py: Python<'py>,
     protobuf_bytes: &[u8],
     descriptor_bytes: &[u8],
     message_type: &str,
     pretty: bool,
+    include_default_values: bool,
 ) -> PyResult<String> {
+    let options = core::JsonOutputOptions {
+        pretty,
+        include_default_values,
+    };
     py.detach(|| {
-        core::protobuf_to_json_string(protobuf_bytes, descriptor_bytes, message_type, pretty)
+        core::protobuf_to_json_string_with_options(
+            protobuf_bytes,
+            descriptor_bytes,
+            message_type,
+            options,
+        )
     })
     .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))
 }
@@ -96,17 +106,22 @@ impl DescriptorCache {
     }
 
     /// Convert a Protobuf message (bytes) to a JSON string.
-    #[pyo3(signature = (protobuf_bytes, message_type, pretty = false))]
+    #[pyo3(signature = (protobuf_bytes, message_type, pretty = false, include_default_values = false))]
     fn protobuf_to_json(
         &self,
         py: Python<'_>,
         protobuf_bytes: &[u8],
         message_type: &str,
         pretty: bool,
+        include_default_values: bool,
     ) -> PyResult<String> {
+        let options = core::JsonOutputOptions {
+            pretty,
+            include_default_values,
+        };
         py.detach(|| {
             let desc = self.resolver.resolve(message_type)?;
-            core::protobuf_to_json_string_with_descriptor_owned(protobuf_bytes, desc, pretty)
+            core::protobuf_to_json_string_with_descriptor_options(protobuf_bytes, desc, options)
         })
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))
     }

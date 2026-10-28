@@ -193,6 +193,7 @@ def protobuf_to_json(
     descriptor_bytes: bytes,
     message_type: str,
     pretty: bool = False,
+    include_default_values: bool = False,
 ) -> str
 ```
 
@@ -204,6 +205,7 @@ def protobuf_to_json(
 | `descriptor_bytes` | `bytes` | Yes | Compiled descriptor set |
 | `message_type` | `str` | Yes | Full message type name (e.g., `"user.User"`) |
 | `pretty` | `bool` | No | If `True`, format JSON with indentation (default: `False`) |
+| `include_default_values` | `bool` | No | If `True`, emit fields without presence even at their default value (`0`, `""`, `false`, `[]`, `{}`). Fields with presence (`optional`, messages, `oneof` members) are still emitted only when set (default: `False`) |
 
 #### Returns
 
@@ -360,6 +362,7 @@ class DescriptorCache:
         protobuf_bytes: bytes,
         message_type: str,
         pretty: bool = False,
+        include_default_values: bool = False,
     ) -> str: ...
     def pydantic_to_protobuf(
         self,
@@ -389,7 +392,7 @@ Raises `ValueError` if the descriptor bytes cannot be decoded.
 Convert a JSON string to a Protobuf message. Raises `ValueError` if the JSON is
 invalid or the message type is not found.
 
-`protobuf_to_json(protobuf_bytes, message_type, pretty=False) -> str`
+`protobuf_to_json(protobuf_bytes, message_type, pretty=False, include_default_values=False) -> str`
 
 Convert a Protobuf message to a JSON string. Raises `RuntimeError` on decoding
 or serialization failure, `ValueError` if the message type is not found.
@@ -397,12 +400,18 @@ or serialization failure, `ValueError` if the message type is not found.
 `pydantic_to_protobuf(pydantic_model, message_type) -> bytes`
 
 Convert a Pydantic model to a Protobuf message. Pure-Python wrapper that calls
-`model_dump_json()` and feeds the result to the cached `json_to_protobuf`.
+`model_dump_json()` and feeds the result to the cached `json_to_protobuf`. Models
+with `bytes` fields (at any depth) are dumped through Python objects instead, with
+`bytes` written as base64 as the protobuf JSON mapping requires.
 
 `protobuf_to_pydantic(protobuf_bytes, model_class, message_type) -> T`
 
 Convert a Protobuf message to an instance of `model_class`. Pure-Python wrapper
-around the cached `protobuf_to_json` followed by `model_class.model_validate_json()`.
+around the cached `protobuf_to_json` (with `include_default_values=True`, so a
+required field holding `0`, `""` or `false` is not reported as missing) followed by
+`model_class.model_validate_json()`. Models with `bytes` fields are validated in
+Python mode after decoding their base64 values; a `strict=True` model then needs
+Python types for its other fields.
 
 A single cache instance handles every message type defined in the descriptor and
 is safe to share across threads.
@@ -441,12 +450,12 @@ protoruf includes complete type stubs for IDE autocomplete and type checking:
 def compile_proto(proto_path: str, include_paths: list[str] | None = None) -> bytes: ...
 def compile_proto_from_sources(files: dict[str, str], root: str, include_imports: bool = True) -> bytes: ...
 def json_to_protobuf(json_str: str, descriptor_bytes: bytes, message_type: str) -> bytes: ...
-def protobuf_to_json(protobuf_bytes: bytes, descriptor_bytes: bytes, message_type: str, pretty: bool = False) -> str: ...
+def protobuf_to_json(protobuf_bytes: bytes, descriptor_bytes: bytes, message_type: str, pretty: bool = False, include_default_values: bool = False) -> str: ...
 
 class DescriptorCache:
     def __init__(self, descriptor_bytes: bytes) -> None: ...
     def json_to_protobuf(self, json_str: str, message_type: str) -> bytes: ...
-    def protobuf_to_json(self, protobuf_bytes: bytes, message_type: str, pretty: bool = False) -> str: ...
+    def protobuf_to_json(self, protobuf_bytes: bytes, message_type: str, pretty: bool = False, include_default_values: bool = False) -> str: ...
 ```
 
 ## Module Exports

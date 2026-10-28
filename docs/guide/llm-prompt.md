@@ -87,10 +87,12 @@ missing.
 
 ```python
 def json_to_protobuf(json_str: str, descriptor_bytes: bytes, message_type: str) -> bytes
-def protobuf_to_json(protobuf_bytes: bytes, descriptor_bytes: bytes, message_type: str, pretty: bool = False) -> str
+def protobuf_to_json(protobuf_bytes: bytes, descriptor_bytes: bytes, message_type: str, pretty: bool = False, include_default_values: bool = False) -> str
 ```
 `message_type` is the **fully qualified** name: `"<package>.<Message>"`, e.g.
-`"user.User"`. `pretty=True` indents the JSON output. These re-resolve the message
+`"user.User"`. `pretty=True` indents the JSON output. `include_default_values=True`
+emits fields without presence even at their default value (fields with presence —
+`optional`, messages — still only when set). These re-resolve the message
 type on every call; for hot loops use `DescriptorCache`.
 
 ### Pydantic helpers (free functions)
@@ -100,8 +102,10 @@ def pydantic_to_protobuf(pydantic_model: BaseModel, descriptor_bytes: bytes, mes
 def protobuf_to_pydantic(protobuf_bytes: bytes, descriptor_bytes: bytes, model_class: Type[T], message_type: str) -> T
 ```
 Thin wrappers: `pydantic_to_protobuf` calls `model.model_dump_json()` then
-`json_to_protobuf`; `protobuf_to_pydantic` calls `protobuf_to_json` then
-`model_class.model_validate_json()`. Note the argument order:
+`json_to_protobuf`; `protobuf_to_pydantic` calls `protobuf_to_json(...,
+include_default_values=True)` then `model_class.model_validate_json()`. Models with
+`bytes` fields go through Python objects so that `bytes` are carried as base64; no
+model configuration is needed. Note the argument order:
 `protobuf_to_pydantic(bytes, descriptor, ModelClass, message_type)`.
 
 ### `DescriptorCache` (high-throughput)
@@ -115,7 +119,7 @@ One instance handles every message type and is safe to share across threads.
 class DescriptorCache:
     def __init__(self, descriptor_bytes: bytes) -> None: ...
     def json_to_protobuf(self, json_str: str, message_type: str) -> bytes: ...
-    def protobuf_to_json(self, protobuf_bytes: bytes, message_type: str, pretty: bool = False) -> str: ...
+    def protobuf_to_json(self, protobuf_bytes: bytes, message_type: str, pretty: bool = False, include_default_values: bool = False) -> str: ...
     def pydantic_to_protobuf(self, pydantic_model: BaseModel, message_type: str) -> bytes: ...
     def protobuf_to_pydantic(self, protobuf_bytes: bytes, model_class: Type[T], message_type: str) -> T: ...
 ```
@@ -193,8 +197,9 @@ validating JSON for it, follow these rules exactly:
   big-integer-aware JSON parser.
 - **`bytes` fields** map to standard base64-encoded strings.
 - **Fields at their proto3 default (0, `""`, `false`, empty repeated/map) are
-  omitted** from the output JSON. Don't rely on them being present after a
-  round-trip; re-parsing yields the default anyway.
+  omitted** from the output JSON by default. Don't rely on them being present
+  after a round-trip, or pass `include_default_values=True` to emit them (the
+  Pydantic helpers do this, so required fields holding a zero value validate).
 - Standard proto3 JSON applies otherwise (nested messages → objects, repeated →
   arrays, map → object, `oneof` → the single set field, well-known types like
   `Timestamp`/`Duration`/`Struct` use their canonical JSON forms).

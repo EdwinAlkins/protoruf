@@ -19,6 +19,7 @@ def protobuf_to_json(
     descriptor_bytes: bytes,
     message_type: str,
     pretty: bool = False,
+    include_default_values: bool = False,
 ) -> str: ...
 
 
@@ -39,4 +40,5 @@ class DescriptorCache:
         protobuf_bytes: bytes,
         message_type: str,
         pretty: bool = False,
+        include_default_values: bool = False,
     ) -> str: ...
