@@ -2,6 +2,7 @@
 from typing import Type, TypeVar
 
 from . import _protoruf
+from ._native import OpenIntEnum
 from ._pydantic import model_from_json, model_to_json
 from .compiler import compile_proto, load_descriptor, compile_proto_from_sources
 
@@ -19,6 +20,7 @@ __all__ = [
     "protobuf_to_pydantic",
     "pydantic_to_protobuf",
     "DescriptorCache",
+    "OpenIntEnum",
 ]
 __version__ = "0.2.0"
 

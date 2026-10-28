@@ -1,0 +1,54 @@
+// Fixture for the native codec spike (S1): a realistic ~20-field message with
+// nesting and repeated fields, plus a tiny message. Integer and float fields use
+// int64/double so that fastgrpc2 (which maps int -> int64, float -> double) encodes
+// the same contract.
+syntax = "proto3";
+
+package bench;
+
+enum Status {
+  STATUS_UNSPECIFIED = 0;
+  STATUS_ACTIVE = 1;
+  STATUS_CLOSED = 2;
+}
+
+message Address {
+  string street = 1;
+  string city = 2;
+  string zip = 3;
+  string country = 4;
+}
+
+message Line {
+  string sku = 1;
+  int64 qty = 2;
+  double price = 3;
+}
+
+message Order {
+  string id = 1;
+  string customer = 2;
+  string email = 3;
+  int64 created = 4;
+  int64 updated = 5;
+  double total = 6;
+  double tax = 7;
+  bool paid = 8;
+  bool shipped = 9;
+  Status status = 10;
+  string note = 11;
+  string currency = 12;
+  int64 version = 13;
+  bytes signature = 14;
+  Address billing = 15;
+  Address shipping = 16;
+  repeated Line lines = 17;
+  repeated string tags = 18;
+  int64 priority = 19;
+  string channel = 20;
+}
+
+message Small {
+  string id = 1;
+  int64 value = 2;
+}

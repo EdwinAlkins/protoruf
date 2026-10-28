@@ -1,5 +1,7 @@
 """Type stubs for the Rust extension module."""
 
+from typing import Any, Literal
+
 
 def compile_proto(
     proto_path: str,
@@ -42,3 +44,21 @@ class DescriptorCache:
         pretty: bool = False,
         include_default_values: bool = False,
     ) -> str: ...
+
+
+class NativeCodec:
+    """Spike: protobuf bytes <-> Python objects without JSON (API not final)."""
+
+    def __init__(
+        self,
+        descriptor_bytes: bytes,
+        message_type: str,
+        model: type | None = None,
+        *,
+        mode: Literal["validate", "construct"] = "validate",
+        unknown_enum: Literal["keep", "error"] = "keep",
+        naive_datetime: Literal["error", "utc"] = "error",
+    ) -> None: ...
+    def decode(self, data: bytes) -> Any: ...
+    def decode_dict(self, data: bytes) -> dict[str, Any]: ...
+    def encode(self, obj: Any) -> bytes: ...

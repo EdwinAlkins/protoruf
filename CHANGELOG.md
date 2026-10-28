@@ -13,6 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `DescriptorCache`, Python binding): emits fields without presence even at their
   default value. Fields with presence (`optional`, messages, `oneof` members) are
   still emitted only when set. Off by default: the JSON output is unchanged.
+- Experimental `NativeCodec` (spike, API not final): protobuf bytes <-> Python
+  objects and Pydantic models without the JSON round-trip. Maps the well-known
+  types to native values (`Timestamp` <-> aware `datetime`, `Duration` <->
+  `timedelta`, wrappers <-> scalar or `None`, `Struct`/`Value`/`ListValue` <-> JSON
+  values, `FieldMask` <-> `list[str]`), and offers a `mode="construct"` that builds
+  model instances (nested models and enum members included) without validation.
+- `OpenIntEnum`: an `IntEnum` that keeps undeclared values as cached
+  `UNRECOGNIZED_<n>` pseudo-members, matching proto3 open enums.
+
 ### Fixed
 
 - `protobuf_to_pydantic` no longer reports a required field holding a zero value

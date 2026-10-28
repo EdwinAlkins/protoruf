@@ -135,5 +135,6 @@ fn _protoruf(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(json_to_protobuf, m)?)?;
     m.add_function(wrap_pyfunction!(protobuf_to_json, m)?)?;
     m.add_class::<DescriptorCache>()?;
+    m.add_class::<crate::python_native::NativeCodec>()?;
     Ok(())
 }
