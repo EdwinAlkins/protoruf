@@ -138,6 +138,116 @@ descriptor = compile_proto_from_sources(files, root="user.proto")
 
 ---
 
+### `compile_protos()`
+
+Compile several root `.proto` files in one go, from memory, disk, or both. Imports are
+resolved, in this order, from `sources`, from each directory of `include_paths`, from
+the standard protos embedded in protoruf, and from the `google/protobuf/*` well-known
+types.
+
+```python
+def compile_protos(
+    roots: Sequence[str | Path],
+    include_paths: Sequence[str | Path] = (),
+    sources: Mapping[str, str] | None = None,
+    *,
+    include_imports: bool = True,
+    source_info: bool = False,
+    standard_protos: bool = True,
+    output_path: str | Path | None = None,
+) -> bytes
+```
+
+#### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `roots` | `Sequence[str \| Path]` | Yes | Files to compile: import names (`"orders/v1/orders.proto"`, a key of `sources` or a path relative to an include path), or paths inside one of `include_paths` |
+| `include_paths` | `Sequence[str \| Path]` | No | Directories to resolve imports from |
+| `sources` | `Mapping[str, str]` | No | In-memory files, name → source text; they take priority over disk |
+| `include_imports` | `bool` | No | Embed every imported file so the descriptor is self-contained (default `True`) |
+| `source_info` | `bool` | No | Keep comments and source positions, needed to read comments through `Schema` (default `False`; makes the descriptor several times larger) |
+| `standard_protos` | `bool` | No | Resolve the embedded `google/rpc/*`, `google/type/*`, `grpc/health/v1` and `grpc/reflection/{v1,v1alpha}` files (default `True`) |
+| `output_path` | `str \| Path` | No | Optional path to save the descriptor |
+
+#### Returns
+
+`bytes` — The compiled descriptor set (`FileDescriptorSet`).
+
+#### Raises
+
+- `RuntimeError` — If compilation fails. The message gives the location:
+  `Failed to compile proto file: orders.proto:4:3: name 'Missing' is not defined`
+
+#### Example
+
+```python
+from protoruf import compile_protos
+
+# A whole proto/ directory, with comments, plus a file generated in memory.
+descriptor = compile_protos(
+    ["orders/v1/orders.proto", "orders/v1/admin.proto", "gen/app.proto"],
+    include_paths=["proto"],
+    sources={"gen/app.proto": generated_text},
+    source_info=True,
+)
+```
+
+---
+
+### `Schema`
+
+Immutable, typed view of a compiled descriptor set: files, messages (nested ones and
+map entries included), fields, enums, services and their comments. Used to generate
+code from `.proto` files, check models against them, and serve gRPC server reflection.
+
+```python
+class Schema:
+    def __init__(self, descriptor: bytes) -> None: ...
+    descriptor: bytes
+    files: Mapping[str, FileInfo]          # by file name
+    messages: Mapping[str, MessageInfo]    # by full name
+    enums: Mapping[str, EnumInfo]
+    services: Mapping[str, ServiceInfo]
+    def file(self, name: str) -> FileInfo: ...
+    def message(self, full_name: str) -> MessageInfo: ...
+    def enum(self, full_name: str) -> EnumInfo: ...
+    def service(self, full_name: str) -> ServiceInfo: ...
+    # gRPC server reflection
+    def file_descriptor_proto(self, name: str) -> bytes: ...
+    def file_containing_symbol(self, symbol: str) -> str | None: ...
+    def file_dependencies(self, name: str) -> tuple[str, ...]: ...
+```
+
+The info objects (`protoruf.schema`) are frozen dataclasses:
+
+| Class | Main attributes |
+|-------|-----------------|
+| `FileInfo` | `name`, `package`, `syntax`, `dependencies`, top-level `messages` / `enums` / `services` (full names) |
+| `MessageInfo` | `name`, `full_name`, `file`, `parent`, `fields` (declaration order), `oneofs` (real ones only), `reserved_ranges` (inclusive pairs), `reserved_names`, `is_map_entry`, `deprecated`, `comments`; `field(name)` |
+| `FieldInfo` | `name`, `number`, `json_name`, `kind` (`"int32"`, `"string"`, …, `"enum"`, `"message"`), `type_name`, `cardinality`, `is_map`, `map_key_kind`, `map_value_kind`, `map_value_type_name`, `is_packed`, `has_presence`, `proto3_optional`, `oneof`, `default_value`, `deprecated`, `comments`; `is_list` |
+| `EnumInfo` / `EnumValueInfo` | `full_name`, `parent`, `values` (`name`, `number`, `deprecated`), `reserved_ranges`, `reserved_names` |
+| `ServiceInfo` / `MethodInfo` | `methods`; `input_type`, `output_type`, `client_streaming`, `server_streaming`; `method(name)` |
+| `Comments` | `leading`, `trailing`, `detached` as written; `text` (cleaned leading, else trailing comment) |
+
+Comments are only filled when the descriptor was compiled with `source_info=True`.
+Lookups of unknown names raise `KeyError`.
+
+#### Example
+
+```python
+from protoruf import Schema, compile_protos
+
+schema = Schema(compile_protos(["orders/v1/orders.proto"], ["proto"], source_info=True))
+order = schema.message("orders.v1.Order")
+for field in order.fields:
+    print(field.number, field.name, field.kind, field.type_name, field.has_presence)
+
+schema.file_containing_symbol("orders.v1.Orders.GetOrder")  # "orders/v1/orders.proto"
+```
+
+---
+
 ### `json_to_protobuf()`
 
 Convert a JSON string to a Protobuf message.
@@ -469,8 +579,12 @@ __all__ = [
     "compile_proto",
     "load_descriptor",
     "compile_proto_from_sources",
+    "compile_protos",
     "protobuf_to_pydantic",
+    "pydantic_to_protobuf",
     "DescriptorCache",
+    "OpenIntEnum",
+    "Schema",
 ]
 ```
 
