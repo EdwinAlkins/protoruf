@@ -23,8 +23,10 @@
 mod pool_cache;
 
 pub mod core;
+pub mod describe;
 pub mod descriptor_resolver;
 pub mod native;
+pub mod standard_protos;
 
 #[cfg(feature = "python")]
 mod python;

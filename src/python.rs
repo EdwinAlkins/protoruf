@@ -4,6 +4,7 @@
 //! errors between Rust and Python.
 
 use crate::core;
+use crate::describe;
 use crate::descriptor_resolver::DescriptorResolver;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
@@ -27,6 +28,51 @@ fn compile_proto_from_sources(
 ) -> PyResult<Vec<u8>> {
     core::compile_proto_from_sources(files, root, include_imports)
         .map_err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>)
+}
+
+/// Compile several root .proto files from memory and/or disk, with the standard protos
+#[pyfunction]
+#[pyo3(signature = (
+    roots,
+    include_paths = Vec::new(),
+    sources = HashMap::new(),
+    include_imports = true,
+    source_info = false,
+    standard_protos = true,
+))]
+fn compile_protos(
+    py: Python<'_>,
+    roots: Vec<String>,
+    include_paths: Vec<String>,
+    sources: HashMap<String, String>,
+    include_imports: bool,
+    source_info: bool,
+    standard_protos: bool,
+) -> PyResult<Vec<u8>> {
+    let options = core::CompileOptions {
+        include_imports,
+        source_info,
+        standard_protos,
+    };
+    py.detach(|| core::compile_protos(&roots, &include_paths, sources, options))
+        .map_err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>)
+}
+
+/// Describe a descriptor set (files, messages, enums, services) as a JSON document
+#[pyfunction]
+fn describe_descriptor_set(py: Python<'_>, descriptor_bytes: &[u8]) -> PyResult<String> {
+    py.detach(|| describe::describe_descriptor_set(descriptor_bytes))
+        .map_err(PyErr::new::<pyo3::exceptions::PyValueError, _>)
+}
+
+/// Split a descriptor set into (file name, FileDescriptorProto bytes), dependencies first
+#[pyfunction]
+fn split_descriptor_set(
+    py: Python<'_>,
+    descriptor_bytes: &[u8],
+) -> PyResult<Vec<(String, Vec<u8>)>> {
+    py.detach(|| describe::split_descriptor_set(descriptor_bytes))
+        .map_err(PyErr::new::<pyo3::exceptions::PyValueError, _>)
 }
 
 /// Convert a JSON string to a Protobuf message (bytes)
@@ -132,6 +178,9 @@ impl DescriptorCache {
 fn _protoruf(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(compile_proto, m)?)?;
     m.add_function(wrap_pyfunction!(compile_proto_from_sources, m)?)?;
+    m.add_function(wrap_pyfunction!(compile_protos, m)?)?;
+    m.add_function(wrap_pyfunction!(describe_descriptor_set, m)?)?;
+    m.add_function(wrap_pyfunction!(split_descriptor_set, m)?)?;
     m.add_function(wrap_pyfunction!(json_to_protobuf, m)?)?;
     m.add_function(wrap_pyfunction!(protobuf_to_json, m)?)?;
     m.add_class::<DescriptorCache>()?;

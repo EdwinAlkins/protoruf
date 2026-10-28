@@ -32,6 +32,22 @@ def compile_proto_from_sources(
 ) -> bytes: ...
 
 
+def compile_protos(
+    roots: list[str],
+    include_paths: list[str] = ...,
+    sources: dict[str, str] = ...,
+    include_imports: bool = True,
+    source_info: bool = False,
+    standard_protos: bool = True,
+) -> bytes: ...
+
+
+def describe_descriptor_set(descriptor_bytes: bytes) -> str: ...
+
+
+def split_descriptor_set(descriptor_bytes: bytes) -> list[tuple[str, bytes]]: ...
+
+
 class DescriptorCache:
     """A reusable, pre-decoded descriptor pool."""
 
