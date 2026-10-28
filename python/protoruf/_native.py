@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import enum
 import types
-from typing import Any, Union, get_args, get_origin
+from typing import Any, Union, cast, get_args, get_origin
 
 from pydantic import BaseModel
 from pydantic_core import PydanticUndefined
@@ -39,7 +39,8 @@ class OpenIntEnum(enum.IntEnum):
         member = int.__new__(cls, value)
         member._name_ = f"UNRECOGNIZED_{value}"
         member._value_ = value
-        return cls._value2member_map_.setdefault(value, member)
+        # The map is typed `dict[Any, Enum]`; every entry of this class is a member of it.
+        return cast(OpenIntEnum, cls._value2member_map_.setdefault(value, member))
 
 
 def _target(annotation: Any) -> type | None:

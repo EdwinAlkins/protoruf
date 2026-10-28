@@ -14,7 +14,7 @@ use std::collections::HashMap;
 #[pyo3(signature = (proto_path, include_paths = None))]
 fn compile_proto(proto_path: &str, include_paths: Option<Vec<String>>) -> PyResult<Vec<u8>> {
     core::compile_proto(proto_path, include_paths)
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))
+        .map_err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>)
 }
 
 /// Compile a set of .proto files provided in memory (no filesystem access)
@@ -26,7 +26,7 @@ fn compile_proto_from_sources(
     include_imports: bool,
 ) -> PyResult<Vec<u8>> {
     core::compile_proto_from_sources(files, root, include_imports)
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))
+        .map_err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>)
 }
 
 /// Convert a JSON string to a Protobuf message (bytes)
@@ -39,7 +39,7 @@ fn json_to_protobuf<'py>(
 ) -> PyResult<Bound<'py, PyBytes>> {
     let protobuf_bytes = py
         .detach(|| core::json_to_protobuf_bytes(json_str, descriptor_bytes, message_type))
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e))?;
+        .map_err(PyErr::new::<pyo3::exceptions::PyValueError, _>)?;
 
     Ok(PyBytes::new(py, &protobuf_bytes))
 }
@@ -67,7 +67,7 @@ fn protobuf_to_json<'py>(
             options,
         )
     })
-    .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))
+    .map_err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>)
 }
 
 /// A reusable, pre-decoded descriptor pool.
@@ -100,7 +100,7 @@ impl DescriptorCache {
                 let desc = self.resolver.resolve(message_type)?;
                 core::json_to_protobuf_bytes_with_descriptor_owned(json_str, desc)
             })
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e))?;
+            .map_err(PyErr::new::<pyo3::exceptions::PyValueError, _>)?;
 
         Ok(PyBytes::new(py, &protobuf_bytes))
     }
@@ -123,7 +123,7 @@ impl DescriptorCache {
             let desc = self.resolver.resolve(message_type)?;
             core::protobuf_to_json_string_with_descriptor_options(protobuf_bytes, desc, options)
         })
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))
+        .map_err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>)
     }
 }
 
