@@ -10,14 +10,26 @@ use protox::{Compiler, Error as ProtoxError};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+/// Output options for Protobuf -> JSON conversion.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct JsonOutputOptions {
+    /// Indent the JSON output.
+    pub pretty: bool,
+    /// Emit fields without presence (proto3 scalars, repeated, maps) even when they
+    /// hold their default value. Fields with presence (`optional`, messages, oneof
+    /// members) are still emitted only when set, so an unset field stays absent.
+    pub include_default_values: bool,
+}
+
 /// Serialization options matching protoruf's historical JSON shape:
 /// proto field names (snake_case), 64-bit integers as JSON numbers, and enums
 /// as their numeric value.
-fn serialize_options() -> SerializeOptions {
+fn serialize_options(include_default_values: bool) -> SerializeOptions {
     SerializeOptions::new()
         .use_proto_field_name(true)
         .stringify_64_bit_integers(false)
         .use_enum_numbers(true)
+        .skip_default_fields(!include_default_values)
 }
 
 /// Compile a .proto file to a descriptor set (bytes)
@@ -162,15 +174,29 @@ pub fn protobuf_to_json_string_with_descriptor_owned(
     message_descriptor: MessageDescriptor,
     pretty: bool,
 ) -> Result<String, String> {
+    let options = JsonOutputOptions {
+        pretty,
+        ..JsonOutputOptions::default()
+    };
+    protobuf_to_json_string_with_descriptor_options(protobuf_bytes, message_descriptor, options)
+}
+
+/// Convert Protobuf bytes to a JSON string using an owned message descriptor and
+/// explicit output options.
+pub fn protobuf_to_json_string_with_descriptor_options(
+    protobuf_bytes: &[u8],
+    message_descriptor: MessageDescriptor,
+    output: JsonOutputOptions,
+) -> Result<String, String> {
     let dynamic_message = DynamicMessage::decode(message_descriptor, protobuf_bytes)
         .map_err(|e| format!("Decoding error: {}", e))?;
 
-    let options = serialize_options();
+    let options = serialize_options(output.include_default_values);
     // Pre-allocate: JSON is typically a few times larger than the protobuf wire
     // format, so this avoids repeated reallocations as the buffer grows.
     let estimated_capacity = protobuf_bytes.len().saturating_mul(3).max(128);
     let buf = Vec::with_capacity(estimated_capacity);
-    let bytes = if pretty {
+    let bytes = if output.pretty {
         let mut serializer = serde_json::Serializer::pretty(buf);
         dynamic_message
             .serialize_with_options(&mut serializer, &options)
@@ -219,9 +245,23 @@ pub fn protobuf_to_json_string(
     message_type: &str,
     pretty: bool,
 ) -> Result<String, String> {
+    let options = JsonOutputOptions {
+        pretty,
+        ..JsonOutputOptions::default()
+    };
+    protobuf_to_json_string_with_options(protobuf_bytes, descriptor_bytes, message_type, options)
+}
+
+/// Convert a Protobuf message (bytes) to a JSON string with explicit output options.
+pub fn protobuf_to_json_string_with_options(
+    protobuf_bytes: &[u8],
+    descriptor_bytes: &[u8],
+    message_type: &str,
+    output: JsonOutputOptions,
+) -> Result<String, String> {
     let pool = pool_cache::load_descriptor_pool_cached(descriptor_bytes)?;
     let message_descriptor = get_message_descriptor(&pool, message_type)?;
-    protobuf_to_json_string_with_descriptor_owned(protobuf_bytes, message_descriptor, pretty)
+    protobuf_to_json_string_with_descriptor_options(protobuf_bytes, message_descriptor, output)
 }
 
 #[cfg(test)]
@@ -609,6 +649,45 @@ mod tests {
         let b =
             json_to_protobuf_bytes(json_input, &get_test_descriptor(), "message.Message").unwrap();
         assert_eq!(a, b);
+    }
+
+    #[test]
+    fn test_include_default_values_keeps_presence_fields_absent() {
+        let files = HashMap::from([(
+            "d.proto".to_string(),
+            r#"syntax = "proto3"; package d;
+               message Child { string name = 1; }
+               message M {
+                 string s = 1; int64 i = 2; bool b = 3; bytes raw = 4;
+                 repeated string tags = 5; map<string, int32> counts = 6;
+                 optional int32 maybe = 7; Child child = 8;
+               }"#
+            .to_string(),
+        )]);
+        let descriptor = compile_proto_from_sources(files, "d.proto", true).unwrap();
+        let output = JsonOutputOptions {
+            include_default_values: true,
+            ..JsonOutputOptions::default()
+        };
+
+        let json = protobuf_to_json_string_with_options(&[], &descriptor, "d.M", output).unwrap();
+        let result: JsonValue = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            result,
+            serde_json::json!({
+                "s": "", "i": 0, "b": false, "raw": "", "tags": [], "counts": {}
+            })
+        );
+
+        // A set `optional` keeps its zero value; the default output still omits it all.
+        let set = json_to_protobuf_bytes(r#"{"maybe": 0}"#, &descriptor, "d.M").unwrap();
+        let json = protobuf_to_json_string_with_options(&set, &descriptor, "d.M", output).unwrap();
+        assert_eq!(
+            serde_json::from_str::<JsonValue>(&json).unwrap()["maybe"],
+            0
+        );
+        let default = protobuf_to_json_string(&[], &descriptor, "d.M", false).unwrap();
+        assert_eq!(default, "{}");
     }
 
     #[test]

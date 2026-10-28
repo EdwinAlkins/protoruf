@@ -23,5 +23,9 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Clippy
         run: cargo clippy --all-targets -- -D warnings
+      # The Python binding (src/python*.rs) only compiles with the `python` feature,
+      # so the default clippy run above never lints it.
+      - name: Clippy (python feature)
+        run: cargo clippy --all-targets --features python -- -D warnings
       - name: Run tests
         run: cargo test --all-targets

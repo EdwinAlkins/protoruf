@@ -121,7 +121,7 @@ Convert a JSON string to a Protobuf message.
 
 ---
 
-### `protobuf_to_json(protobuf_bytes, descriptor_bytes, message_type, pretty=False)`
+### `protobuf_to_json(protobuf_bytes, descriptor_bytes, message_type, pretty=False, include_default_values=False)`
 
 Convert a Protobuf message to a JSON string.
 
@@ -131,6 +131,7 @@ Convert a Protobuf message to a JSON string.
 | `descriptor_bytes` | `bytes`  | Compiled protobuf descriptor set                  |
 | `message_type`     | `str`    | Full message type name (e.g. `"message.Message"`) |
 | `pretty`           | `bool`   | If `True`, format JSON with indentation           |
+| `include_default_values` | `bool` | If `True`, emit fields without presence even at their default value |
 
 **Returns:** `str` — The JSON representation.
 

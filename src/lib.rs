@@ -24,9 +24,13 @@ mod pool_cache;
 
 pub mod core;
 pub mod descriptor_resolver;
+pub mod native;
 
 #[cfg(feature = "python")]
 mod python;
+
+#[cfg(feature = "python")]
+mod python_native;
 
 #[cfg(feature = "node")]
 mod node;
