@@ -4,7 +4,7 @@
 
 > Feed this file to an LLM (or paste it into a system prompt) so it can use the
 > **Python** target of `protoruf` correctly with no other context. It is a
-> complete, self-contained reference for version **0.2.0**.
+> complete, self-contained reference for version **0.3.0**.
 
 ## What protoruf is
 
