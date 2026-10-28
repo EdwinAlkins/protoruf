@@ -44,8 +44,8 @@ pub fn compile_proto(
     let include_paths_ref: Vec<&str> = include_paths.iter().map(|s| s.as_str()).collect();
 
     // Compile using protox
-    let file_descriptor_set = protox::compile([&proto_path], &include_paths_ref)
-        .map_err(|e| format!("Failed to compile proto file: {}", e))?;
+    let file_descriptor_set =
+        protox::compile([&proto_path], &include_paths_ref).map_err(compile_error)?;
 
     // Serialize to bytes
     let mut descriptor_bytes = Vec::new();
@@ -97,10 +97,14 @@ pub fn compile_proto_from_sources(
     // the descriptor set is self-contained. When false, imports are omitted;
     // DescriptorPool::decode cannot load a root that references missing imports.
     compiler.include_imports(include_imports);
-    compiler
-        .open_file(root)
-        .map_err(|e| format!("Failed to compile proto file: {}", e))?;
+    compiler.open_file(root).map_err(compile_error)?;
     Ok(compiler.encode_file_descriptor_set())
+}
+
+/// Message of a protox compilation error. The `Debug` format is used on purpose: it
+/// prefixes the message with `file:line:column`, which `Display` leaves out.
+fn compile_error(err: ProtoxError) -> String {
+    format!("Failed to compile proto file: {err:?}")
 }
 
 /// Decode a serialized `FileDescriptorSet` into a reusable [`DescriptorPool`].
@@ -624,5 +628,26 @@ mod tests {
             "this is not valid proto".to_string(),
         )]);
         assert!(compile_proto_from_sources(files, "bad.proto", true).is_err());
+    }
+
+    #[test]
+    fn test_compile_errors_carry_file_line_and_column() {
+        let files = HashMap::from([(
+            "bad.proto".to_string(),
+            "syntax = \"proto3\";\npackage p;\nmessage A {\n  Missing x = 1;\n}\n".to_string(),
+        )]);
+        let err = compile_proto_from_sources(files, "bad.proto", true).unwrap_err();
+        assert_eq!(
+            err,
+            "Failed to compile proto file: bad.proto:4:3: name 'Missing' is not defined"
+        );
+
+        let dir = std::env::temp_dir().join(format!("protoruf-err-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("bad.proto");
+        std::fs::write(&path, "syntax = \"proto3\";\nmessage A { string x = 1 }\n").unwrap();
+        let err = compile_proto(path.to_str().unwrap(), None).unwrap_err();
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert!(err.contains("bad.proto:2:26:"), "{err}");
     }
 }
