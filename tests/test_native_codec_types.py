@@ -341,6 +341,25 @@ def test_construct_defaults_fields_set_and_dropped_fields():
     assert "id" in first.model_fields_set and "note" not in first.model_fields_set
 
 
+def test_construct_copies_defaults_that_hold_mutable_values():
+    """A tuple is shared between instances only if what it holds is immutable too, as
+    `model_construct` does."""
+
+    class Defaults(BaseModel):
+        id: str
+        groups: tuple[list[int], ...] = ([],)
+        names: tuple[str, ...] = ("a", "b")
+        nested: tuple[tuple[int, ...], frozenset[str]] = ((1, 2), frozenset({"x"}))
+
+    c = codec("Order", Defaults, mode="construct")
+    first, second = c.decode(b""), c.decode(b"")
+    first.groups[0].append(42)
+    assert second.groups == ([],)
+    assert first.names is second.names and first.nested is second.nested
+    built = Defaults.model_construct(id="")
+    assert built.groups is not second.groups
+
+
 def test_construct_extra_allow_private_attrs_and_post_init():
     class Extra(BaseModel):
         model_config = ConfigDict(extra="allow")

@@ -5,6 +5,26 @@ All notable changes to **protoruf** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.2] - Pending
+
+### Fixed
+
+- `mode="construct"`: a default value is shared between instances only if it is deeply
+  immutable. A tuple holding a list (`tuple[list[int], ...] = ([],)`) used to be shared, so
+  appending to it in one instance changed the others; it is now copied, as
+  `model_construct` does.
+- JSON bridge (`protobuf_to_pydantic`, `DescriptorCache`): a recursive model with no
+  `bytes` field went through Python-mode validation instead of direct JSON validation,
+  which a `strict=True` model refuses (a `datetime` given as a string). Models are now
+  planned in two passes (which ones hold `bytes`, at any depth, then the plans), so
+  recursion no longer counts as `bytes`.
+
+### Tests
+
+- Known attack shapes (a sub-message repeated thousands of times, at one or two depths,
+  oneof switching, unknown fields, duplicate map keys, packed varints, `Struct` entries)
+  decode in time linear in their size.
+
 ## [0.5.1] - 2026-10-29
 
 ### Security

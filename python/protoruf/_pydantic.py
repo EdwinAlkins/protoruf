@@ -30,26 +30,42 @@ _BYTES = "bytes"
 _plans: dict[type[BaseModel], dict[str, Any]] = {}
 
 
-def _spec(annotation: Any, stack: tuple[type[BaseModel], ...]) -> Any | None:
+def _spec(annotation: Any, with_bytes: frozenset[type[BaseModel]]) -> Any | None:
+    """Where `bytes` values live in a value of type `annotation`, `with_bytes` being the
+    models that hold some; None if nowhere."""
     if annotation is bytes:
         return _BYTES
     origin = get_origin(annotation)
     args = get_args(annotation)
     if origin in (Union, types.UnionType):
         non_none = [a for a in args if a is not type(None)]
-        return _spec(non_none[0], stack) if len(non_none) == 1 else None
+        return _spec(non_none[0], with_bytes) if len(non_none) == 1 else None
     if origin in (list, tuple, set, frozenset):
-        inner = _spec(args[0], stack) if args else None
+        inner = _spec(args[0], with_bytes) if args else None
         return None if inner is None else ("list", inner)
     if origin is dict:
-        inner = _spec(args[1], stack) if len(args) == 2 else None
+        inner = _spec(args[1], with_bytes) if len(args) == 2 else None
         return None if inner is None else ("dict", inner)
-    if isinstance(annotation, type) and issubclass(annotation, BaseModel):
-        # A model already being planned (recursive type) is kept: its plan is
-        # looked up when the value is decoded.
-        if annotation in stack or _plan(annotation, stack):
-            return ("model", annotation)
+    if annotation in with_bytes:
+        return ("model", annotation)
     return None
+
+
+def _models_in(annotation: Any) -> list[type[BaseModel]]:
+    """The models a value of type `annotation` can hold, through the same shapes as
+    `_spec`."""
+    origin = get_origin(annotation)
+    args = get_args(annotation)
+    if origin in (Union, types.UnionType):
+        non_none = [a for a in args if a is not type(None)]
+        return _models_in(non_none[0]) if len(non_none) == 1 else []
+    if origin in (list, tuple, set, frozenset):
+        return _models_in(args[0]) if args else []
+    if origin is dict:
+        return _models_in(args[1]) if len(args) == 2 else []
+    if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+        return [annotation]
+    return []
 
 
 def _input_key(name: str, field: Any) -> str:
@@ -59,18 +75,44 @@ def _input_key(name: str, field: Any) -> str:
     return name
 
 
-def _plan(model_class: type[BaseModel], stack: tuple[type[BaseModel], ...] = ()) -> dict[str, Any]:
+def _plan(model_class: type[BaseModel]) -> dict[str, Any]:
+    """The plan of `model_class`, computing those of every model it reaches.
+
+    Two passes, so that recursion cannot fool the second: find the models that hold
+    `bytes` (directly or through other models, up to a fixed point), then plan each model
+    with only those.
+    """
     cached = _plans.get(model_class)
     if cached is not None:
         return cached
-    stack = (*stack, model_class)
-    plan: dict[str, Any] = {}
-    for name, field in model_class.model_fields.items():
-        spec = _spec(field.annotation, stack)
-        if spec is not None:
-            plan[_input_key(name, field)] = spec
-    _plans[model_class] = plan
-    return plan
+    reachable: list[type[BaseModel]] = []
+    pending = [model_class]
+    while pending:
+        current = pending.pop()
+        if current in reachable:
+            continue
+        reachable.append(current)
+        for field in current.model_fields.values():
+            pending += _models_in(field.annotation)
+    with_bytes: frozenset[type[BaseModel]] = frozenset()
+    changed = True
+    while changed:
+        found = {
+            model
+            for model in reachable
+            if any(_spec(f.annotation, with_bytes) is not None for f in model.model_fields.values())
+        }
+        changed = found != with_bytes
+        with_bytes = frozenset(found)
+    for model in reachable:
+        if model not in _plans:
+            plan = {}
+            for name, field in model.model_fields.items():
+                spec = _spec(field.annotation, with_bytes)
+                if spec is not None:
+                    plan[_input_key(name, field)] = spec
+            _plans[model] = plan
+    return _plans[model_class]
 
 
 def _decode(value: Any, spec: Any) -> Any:
