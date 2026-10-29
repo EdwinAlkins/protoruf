@@ -2,6 +2,7 @@
 
 import datetime
 import math
+import timeit
 
 import pytest
 from pydantic import BaseModel, Field
@@ -135,6 +136,46 @@ def test_repeated_singular_messages_are_merged(schema: Schema) -> None:
     main = lambda payload: bytes.fromhex("2a") + bytes([len(payload)]) + payload  # noqa: E731
     merged = order.decode(main(first) + main(second)).main
     assert merged == Card(number="2", tags=["a", "b"], backup=Card(number="b1", tags=["x", "y"]))
+
+
+def test_merging_is_linear_in_the_number_of_occurrences(schema: Schema) -> None:
+    """Merging used to decode the concatenation again at each occurrence (quadratic)."""
+    codec = schema.codec("shop.Order", Order, field_names=NAMES)
+    occurrence = bytes.fromhex("2a03") + bytes.fromhex("1201") + b"t"  # main.tags += ["t"]
+
+    def best_time(n: int) -> float:
+        data = occurrence * n
+        assert len(codec.decode(data).main.tags) == n
+        return min(timeit.repeat(lambda: codec.decode(data), number=1, repeat=3))
+
+    # Linear: about 8x; quadratic was about 64x.
+    assert best_time(16_000) < 24 * best_time(2_000)
+
+
+def test_merging_with_oneof_keeps_only_the_last_member(schema: Schema) -> None:
+    codec = schema.codec("shop.Order", Order, field_names=NAMES)
+    card = lambda payload: bytes.fromhex("1a") + bytes([len(payload)]) + payload  # noqa: E731
+    iban = bytes.fromhex("1204") + b"FR76"
+    first, second = card(bytes.fromhex("0a01") + b"1"), card(bytes.fromhex("1201") + b"a")
+    assert codec.decode(first + second).card == Card(number="1", tags=["a"])
+    assert codec.decode(first + iban + second) == Order(card=Card(tags=["a"]))
+    assert codec.decode(first + second + iban) == Order(iban="FR76")
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        b"\x00\x01",  # field number 0
+        bytes.fromhex("888080808001") + b"\x05",  # 2**32 + 1, used to be read as field 1
+        bytes.fromhex("8080808010") + b"\x01",  # 2**29: above the maximum
+        b"\x2b\x2c",  # group (wire types 3 and 4)
+        b"\x0e",  # wire type 6
+    ],
+)
+def test_invalid_tags_are_refused(schema: Schema, data: bytes) -> None:
+    codec = schema.codec("shop.Order", Order, field_names=NAMES)
+    with pytest.raises(ValueError, match="invalid field number|unsupported wire type"):
+        codec.decode(data)
 
 
 def test_dates(schema: Schema) -> None:

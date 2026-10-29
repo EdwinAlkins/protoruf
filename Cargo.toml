@@ -1,6 +1,6 @@
 [package]
 name = "protoruf"
-version = "0.5.0"
+version = "0.5.1"
 edition = "2024"
 description = "JSON and Protobuf conversion with Python, Node.js, and WebAssembly bindings"
 license = "MIT"

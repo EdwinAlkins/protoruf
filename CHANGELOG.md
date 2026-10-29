@@ -5,6 +5,27 @@ All notable changes to **protoruf** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - Pending
+
+### Security
+
+- **Merged sub-messages decode in linear time.** A singular message field repeated on the
+  wire was merged by decoding the concatenation again at each occurrence: quadratic, so a
+  128 KB request took 5.8 s of CPU (and a 4 MB one, gRPC's default limit, hours). The
+  occurrences are now collected and decoded once (4 MB: under 0.1 s).
+- **Unknown enum numbers are no longer cached** on the `OpenIntEnum` class: each distinct
+  number a peer sent used to add a pseudo-member for the life of the process. Pseudo-members
+  still compare equal to their int and re-encode unchanged; compare them with `==`, not
+  `is`.
+
+### Fixed
+
+- Field tags are checked: field number 0 or above 2^29 − 1 is refused (a number above 2^32
+  used to be truncated and read as another field), as are groups and wire types 6 and 7,
+  everywhere a tag is read (messages, map entries, well-known types).
+- `unknown_enum="error"` also refuses undeclared enum numbers on encoding, not only on
+  decoding.
+
 ## [0.5.0] - 2026-10-29
 
 ### Added
