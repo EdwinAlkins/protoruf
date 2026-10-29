@@ -1,5 +1,6 @@
 """Protobuf descriptor compiler using Rust protox."""
 
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from . import _protoruf
@@ -78,6 +79,61 @@ def compile_proto_from_sources(
     """
     descriptor_bytes = _protoruf.compile_proto_from_sources(
         files, root, include_imports
+    )
+
+    if output_path:
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(descriptor_bytes)
+
+    return descriptor_bytes
+
+
+def compile_protos(
+    roots: Sequence[str | Path],
+    include_paths: Sequence[str | Path] = (),
+    sources: Mapping[str, str] | None = None,
+    *,
+    include_imports: bool = True,
+    source_info: bool = False,
+    standard_protos: bool = True,
+    output_path: str | Path | None = None,
+) -> bytes:
+    """
+    Compile several root .proto files in one go, from memory, disk, or both.
+
+    Imports are resolved, in this order, from `sources`, from each directory of
+    `include_paths`, from the standard protos embedded in protoruf, and from the
+    `google/protobuf/*` well-known types.
+
+    Args:
+        roots: Files to compile: import names (e.g. "orders/v1/orders.proto", a key of
+            `sources` or a path relative to an include path), or paths inside one of
+            `include_paths`
+        include_paths: Directories to resolve imports from
+        sources: In-memory files, name -> source text; they take priority over disk
+        include_imports: Embed every imported file so the descriptor set is
+            self-contained
+        source_info: Keep comments and source positions (needed by `Schema` to expose
+            comments; makes the descriptor several times larger)
+        standard_protos: Resolve the embedded `google/rpc/*`, `google/type/*`,
+            `grpc/health/v1` and `grpc/reflection/{v1,v1alpha}` files
+        output_path: Optional path to save the descriptor set
+
+    Returns:
+        Compiled descriptor set as bytes
+
+    Raises:
+        RuntimeError: If compilation fails; the message starts with the location of the
+            error (`file.proto:line:column: ...`)
+    """
+    descriptor_bytes = _protoruf.compile_protos(
+        [str(root) for root in roots],
+        [str(Path(path)) for path in include_paths],
+        dict(sources or {}),
+        include_imports,
+        source_info,
+        standard_protos,
     )
 
     if output_path:

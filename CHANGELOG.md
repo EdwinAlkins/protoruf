@@ -5,6 +5,21 @@ All notable changes to **protoruf** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - Pending
+
+### Added
+
+- `compile_protos(roots, include_paths, sources, *, include_imports, source_info,
+  standard_protos, output_path)` (Python): several root files, in-memory sources and
+  include paths in one compilation. `source_info` (comments) is off by default.
+- Standard protos embedded in the library: `google/rpc/*`, `google/type/*`,
+  `grpc/health/v1` and `grpc/reflection/{v1,v1alpha}` (Apache-2.0, unmodified copies
+  of `third_party/proto`), resolved after the user's files so they can be overridden.
+- `Schema(descriptor)`: immutable, typed view of files, messages, fields, enums,
+  services and comments, plus gRPC reflection helpers (`file_descriptor_proto`,
+  `file_containing_symbol`, `file_dependencies`). Backed by the pure-Rust
+  `describe::describe_descriptor_set` and `describe::split_descriptor_set`.
+
 ## [0.3.0] - 2026-10-28
 
 ### Added

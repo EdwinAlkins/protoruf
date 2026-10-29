@@ -1,11 +1,14 @@
 //! Core logic for JSON/Protobuf conversion (pure Rust, no Python dependencies)
 
 use crate::pool_cache;
+use crate::standard_protos::StandardProtoResolver;
 use prost::Message;
 use prost_reflect::{
     DescriptorPool, DeserializeOptions, DynamicMessage, MessageDescriptor, SerializeOptions,
 };
-use protox::file::{ChainFileResolver, File, FileResolver, GoogleFileResolver};
+use protox::file::{
+    ChainFileResolver, File, FileResolver, GoogleFileResolver, IncludeFileResolver,
+};
 use protox::{Compiler, Error as ProtoxError};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -110,6 +113,63 @@ pub fn compile_proto_from_sources(
     // DescriptorPool::decode cannot load a root that references missing imports.
     compiler.include_imports(include_imports);
     compiler.open_file(root).map_err(compile_error)?;
+    Ok(compiler.encode_file_descriptor_set())
+}
+
+/// Options of [`compile_protos`].
+#[derive(Clone, Copy, Debug)]
+pub struct CompileOptions {
+    /// Embed every imported file so the descriptor set is self-contained
+    /// (default `true`).
+    pub include_imports: bool,
+    /// Keep comments and source positions (`SourceCodeInfo`, default `false`). Needed
+    /// to read comments back, at the cost of a several times larger descriptor.
+    pub source_info: bool,
+    /// Resolve the standard protos embedded in protoruf: `google/rpc/*`,
+    /// `google/type/*`, gRPC health and reflection (default `true`).
+    pub standard_protos: bool,
+}
+
+impl Default for CompileOptions {
+    fn default() -> Self {
+        Self {
+            include_imports: true,
+            source_info: false,
+            standard_protos: true,
+        }
+    }
+}
+
+/// Compile several root `.proto` files in one go, from memory, disk, or both.
+///
+/// Imports are resolved, in this order, from `sources` (name -> source text), from
+/// each directory of `include_paths`, from the standard protos embedded in protoruf
+/// (unless disabled) and from the `google/protobuf/*` well-known types. A root is an
+/// import name (`"orders/v1/orders.proto"`) or a path inside one of `include_paths`.
+pub fn compile_protos(
+    roots: &[String],
+    include_paths: &[String],
+    sources: HashMap<String, String>,
+    options: CompileOptions,
+) -> Result<Vec<u8>, String> {
+    if roots.is_empty() {
+        return Err("Failed to compile proto file: no root file given".into());
+    }
+    let mut resolver = ChainFileResolver::new();
+    resolver.add(InMemoryResolver { files: sources });
+    for include in include_paths {
+        resolver.add(IncludeFileResolver::new(PathBuf::from(include)));
+    }
+    if options.standard_protos {
+        resolver.add(StandardProtoResolver);
+    }
+    resolver.add(GoogleFileResolver::new());
+
+    let mut compiler = Compiler::with_file_resolver(resolver);
+    compiler
+        .include_imports(options.include_imports)
+        .include_source_info(options.source_info);
+    compiler.open_files(roots).map_err(compile_error)?;
     Ok(compiler.encode_file_descriptor_set())
 }
 
@@ -728,5 +788,130 @@ mod tests {
         let err = compile_proto(path.to_str().unwrap(), None).unwrap_err();
         std::fs::remove_dir_all(&dir).unwrap();
         assert!(err.contains("bad.proto:2:26:"), "{err}");
+    }
+
+    // --- compile_protos ---
+
+    fn proto_dir() -> String {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/proto")
+            .to_string_lossy()
+            .into_owned()
+    }
+
+    fn file_names(descriptor: &[u8]) -> Vec<String> {
+        let pool = load_descriptor_pool(descriptor).unwrap();
+        pool.files().map(|f| f.name().to_string()).collect()
+    }
+
+    #[test]
+    fn test_compile_protos_mixes_memory_disk_and_standard_protos() {
+        // A generated file importing a contract on disk and a standard proto.
+        let generated = r#"syntax = "proto3"; package gen.v1;
+            import "message.proto";
+            import "google/rpc/status.proto";
+            message Envelope { .message.Message payload = 1; google.rpc.Status error = 2; }"#;
+        let other = r#"syntax = "proto3"; package gen.v1; message Other { string id = 1; }"#;
+        let sources = HashMap::from([
+            ("gen/v1/envelope.proto".to_string(), generated.to_string()),
+            ("gen/v1/other.proto".to_string(), other.to_string()),
+        ]);
+        let roots = [
+            "gen/v1/envelope.proto".to_string(),
+            "gen/v1/other.proto".to_string(),
+        ];
+        let descriptor =
+            compile_protos(&roots, &[proto_dir()], sources, CompileOptions::default()).unwrap();
+        let names = file_names(&descriptor);
+        for expected in [
+            "gen/v1/envelope.proto",
+            "gen/v1/other.proto",
+            "message.proto",
+            "google/rpc/status.proto",
+            "google/protobuf/any.proto",
+        ] {
+            assert!(
+                names.iter().any(|n| n == expected),
+                "{expected} in {names:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_compile_protos_accepts_a_disk_path_as_root() {
+        let root = format!("{}/message.proto", proto_dir());
+        let descriptor = compile_protos(
+            &[root],
+            &[proto_dir()],
+            HashMap::new(),
+            CompileOptions::default(),
+        )
+        .unwrap();
+        assert_eq!(file_names(&descriptor), ["message.proto"]);
+    }
+
+    #[test]
+    fn test_compile_protos_options() {
+        let source = "syntax = \"proto3\";\npackage o;\nimport \"google/rpc/code.proto\";\n// Doc.\nmessage M { google.rpc.Code code = 1; }\n";
+        let sources = || HashMap::from([("o.proto".to_string(), source.to_string())]);
+        let roots = ["o.proto".to_string()];
+        let set = |options| {
+            let bytes = compile_protos(&roots, &[], sources(), options).unwrap();
+            prost_reflect::prost_types::FileDescriptorSet::decode(bytes.as_slice()).unwrap()
+        };
+
+        // Defaults: self-contained, no source info.
+        let defaults = set(CompileOptions::default());
+        assert_eq!(defaults.file.len(), 2);
+        assert!(defaults.file.iter().all(|f| f.source_code_info.is_none()));
+
+        let with_info = set(CompileOptions {
+            source_info: true,
+            ..CompileOptions::default()
+        });
+        assert!(with_info.file.iter().all(|f| f.source_code_info.is_some()));
+
+        let roots_only = set(CompileOptions {
+            include_imports: false,
+            ..CompileOptions::default()
+        });
+        assert_eq!(roots_only.file.len(), 1);
+
+        let err = compile_protos(
+            &roots,
+            &[],
+            sources(),
+            CompileOptions {
+                standard_protos: false,
+                ..CompileOptions::default()
+            },
+        )
+        .unwrap_err();
+        assert!(
+            err.contains("o.proto:3:1:") && err.contains("google/rpc/code.proto"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn test_compile_protos_sources_override_standard_protos() {
+        let custom = r#"syntax = "proto3"; package google.rpc; message Status { int32 code = 1; }"#;
+        let sources = HashMap::from([("google/rpc/status.proto".to_string(), custom.to_string())]);
+        let descriptor = compile_protos(
+            &["google/rpc/status.proto".to_string()],
+            &[],
+            sources,
+            CompileOptions::default(),
+        )
+        .unwrap();
+        let pool = load_descriptor_pool(&descriptor).unwrap();
+        let status = get_message_descriptor(&pool, "google.rpc.Status").unwrap();
+        assert_eq!(status.fields().len(), 1);
+    }
+
+    #[test]
+    fn test_compile_protos_needs_a_root() {
+        let err = compile_protos(&[], &[], HashMap::new(), CompileOptions::default()).unwrap_err();
+        assert!(err.contains("no root file"), "{err}");
     }
 }

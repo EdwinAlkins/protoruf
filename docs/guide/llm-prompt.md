@@ -4,7 +4,7 @@
 
 > Feed this file to an LLM (or paste it into a system prompt) so it can use the
 > **Python** target of `protoruf` correctly with no other context. It is a
-> complete, self-contained reference for version **0.3.0**.
+> complete, self-contained reference for version **0.4.0**.
 
 ## What protoruf is
 
@@ -40,12 +40,14 @@ All names below are importable from the top-level `protoruf` package:
 from protoruf import (
     compile_proto,
     compile_proto_from_sources,
+    compile_protos,
     load_descriptor,
     json_to_protobuf,
     protobuf_to_json,
     pydantic_to_protobuf,
     protobuf_to_pydantic,
     DescriptorCache,
+    Schema,
 )
 ```
 
@@ -76,6 +78,26 @@ this map. Google well-known types are provided automatically. `root` is the entr
 file (must be a key of `files`). `include_imports=True` embeds imported files so
 the descriptor is self-contained; `False` produces a smaller, faster-decoding
 descriptor when you don't need well-known types.
+
+```python
+def compile_protos(
+    roots: Sequence[str | Path],
+    include_paths: Sequence[str | Path] = (),
+    sources: Mapping[str, str] | None = None,
+    *,
+    include_imports: bool = True,
+    source_info: bool = False,
+    standard_protos: bool = True,
+    output_path: str | Path | None = None,
+) -> bytes
+```
+Compile **several roots** from memory and/or disk in one go. Imports resolve from
+`sources` first, then `include_paths`, then the embedded standard protos
+(`google/rpc/*`, `google/type/*`, `grpc/health/v1`, `grpc/reflection/{v1,v1alpha}`,
+unless `standard_protos=False`), then `google/protobuf/*`. A root is an import name or
+a path inside an include path. `source_info=True` keeps comments (needed by
+`Schema` to expose them). Raises `RuntimeError` whose message starts with
+`file.proto:line:column:`.
 
 ```python
 def load_descriptor(descriptor_path: str | Path) -> bytes
@@ -125,6 +147,24 @@ class DescriptorCache:
 ```
 The cache methods take **no** `descriptor_bytes` argument (the pool is already
 decoded). Output format is identical to the free functions.
+
+### `Schema` (introspection)
+
+```python
+class Schema:
+    def __init__(self, descriptor: bytes) -> None: ...
+    files: Mapping[str, FileInfo]; messages: Mapping[str, MessageInfo]
+    enums: Mapping[str, EnumInfo]; services: Mapping[str, ServiceInfo]
+    def message(self, full_name: str) -> MessageInfo: ...   # also file(), enum(), service()
+    def file_descriptor_proto(self, name: str) -> bytes: ...
+    def file_containing_symbol(self, symbol: str) -> str | None: ...
+    def file_dependencies(self, name: str) -> tuple[str, ...]: ...
+```
+Frozen dataclasses describe every element: `MessageInfo.fields` (declaration order),
+`FieldInfo.kind` (`"int32"`, …, `"enum"`, `"message"`), `type_name`, `cardinality`,
+`is_map`, `has_presence`, `oneof` (real oneofs only), `comments.text`, etc. Messages
+include nested ones and map entries (`is_map_entry=True`). Comments need
+`source_info=True` at compile time; unknown names raise `KeyError`.
 
 ## Canonical examples
 
