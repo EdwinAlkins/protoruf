@@ -35,6 +35,8 @@ jobs:
           command: build
           args: --profile dist --locked --out dist -i python${{ matrix.python-version }}
           manylinux: auto
+          # Linux only (servers): profile-guided optimization, see scripts/pgo-prepare.sh.
+          before-script-linux: source scripts/pgo-prepare.sh python${{ matrix.python-version }}
       - name: Install and test the built wheel
         run: |
           python -m pip install "pydantic>=2.13.4"
