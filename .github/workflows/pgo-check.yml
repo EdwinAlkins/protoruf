@@ -1,0 +1,46 @@
+name: PGO check
+
+# Builds the Linux wheel as publish-pypi.yml does, with and without profile-guided
+# optimization, checks the PGO wheel and times both. Publishes nothing.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - scripts/pgo-*
+      - .github/workflows/pgo-check.yml
+      - .github/workflows/publish-pypi.yml
+
+jobs:
+  pgo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - name: Wheel without PGO
+        uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          args: --profile dist --locked --out plain -i python3.14
+          manylinux: auto
+      - name: Wheel with PGO
+        uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          args: --profile dist --locked --out dist -i python3.14
+          manylinux: auto
+          before-script-linux: source scripts/pgo-prepare.sh python3.14
+      - name: Check the PGO wheel
+        run: |
+          python -m pip install "pydantic>=2.13.4"
+          python -m pip install --no-index --no-deps --find-links dist protoruf
+          python scripts/check-wheel.py
+      - name: Time both wheels
+        run: |
+          for wheels in plain dist plain dist; do
+            python -m pip install --quiet --force-reinstall --no-deps "$wheels"/*.whl
+            echo "== $wheels"
+            python scripts/pgo-train.py --bench
+          done
