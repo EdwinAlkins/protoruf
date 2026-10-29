@@ -2,12 +2,15 @@
 
 A light fuzzer (seeded): random bytes, then valid encodings with flipped bits, truncated,
 or with bytes inserted, through every decoding mode. A Rust panic would surface as
-`pyo3_runtime.PanicException`, which is not a `ValueError`.
+`pyo3_runtime.PanicException`, which is not a `ValueError`. And known attack shapes
+(fields repeated many times) decode in time linear in their size.
 """
 
 import datetime
 import enum
 import random
+import timeit
+from collections.abc import Callable
 
 import pytest
 from pydantic import BaseModel, ValidationError
@@ -112,6 +115,35 @@ def test_hostile_input_raises_value_error_only(schema: Schema, seed: int) -> Non
                 codec.decode(data)
             except (ValueError, ValidationError):
                 pass  # refused cleanly
+
+
+_ENTRY = bytes.fromhex("0a070a016b12020800")  # Struct.fields entry: "k" -> null
+
+# Each shape repeats one unit n times, in one message.
+SHAPES: dict[str, Callable[[int], bytes]] = {
+    "merged sub-message": lambda n: bytes.fromhex("22030a0178") * n,
+    "merged at two depths": lambda n: bytes.fromhex("220522030a0178") * n,
+    "oneof switching": lambda n: bytes.fromhex("3a030a0178320179") * n,
+    "unknown fields": lambda n: bytes.fromhex("a00101") * n,
+    "duplicate map keys": lambda n: bytes.fromhex("1a050a016b1200") * n,
+    "packed varints": lambda n: b"\x12" + _varint(n) + b"\x01" * n,
+    "struct entries": lambda n: b"\x42" + _varint(len(_ENTRY) * n) + _ENTRY * n,
+    "merged structs": lambda n: (b"\x42" + _varint(len(_ENTRY)) + _ENTRY) * n,
+}
+
+
+@pytest.mark.parametrize("shape", SHAPES)
+def test_attack_shapes_decode_in_linear_time(schema: Schema, shape: str) -> None:
+    codec = schema.codec("fuzz.Node")
+    build = SHAPES[shape]
+
+    def best_time(n: int) -> float:
+        data = build(n)
+        return min(timeit.repeat(lambda: codec.decode(data), number=3, repeat=5))
+
+    best_time(100)  # warm up
+    # Linear: about 8x. protoruf 0.5.0 (quadratic merging) fails, or hangs on nested merges.
+    assert best_time(2_000) < 24 * best_time(250)
 
 
 def test_deep_nesting_is_refused(schema: Schema) -> None:

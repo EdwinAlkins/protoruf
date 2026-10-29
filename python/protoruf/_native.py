@@ -81,7 +81,17 @@ def model_links(model_class: type[BaseModel]) -> dict[type, dict[str, type]]:
 
 
 _SHARED, _COPIED, _FACTORY, _REQUIRED = range(4)
-_IMMUTABLE = (type(None), bool, int, float, str, bytes, tuple, frozenset, enum.Enum)
+_SCALARS = (type(None), bool, int, float, str, bytes, enum.Enum)
+
+
+def _immutable(value: Any) -> bool:
+    """True when `value` can be shared between instances: scalars, and tuples or
+    frozensets of such values (a tuple holding a list cannot)."""
+    if isinstance(value, _SCALARS):
+        return True
+    if isinstance(value, (tuple, frozenset)):
+        return all(_immutable(item) for item in value)
+    return False
 
 
 def construct_info(model_class: type[BaseModel]) -> tuple[bool, bool, list[tuple[str, int, Any]]]:
@@ -111,7 +121,7 @@ def construct_info(model_class: type[BaseModel]) -> tuple[bool, bool, list[tuple
             defaults.append((name, _FACTORY, field.default_factory))
         elif field.default is PydanticUndefined:
             defaults.append((name, _REQUIRED, None))
-        elif isinstance(field.default, _IMMUTABLE):
+        elif _immutable(field.default):
             defaults.append((name, _SHARED, field.default))
         else:
             defaults.append((name, _COPIED, field.default))

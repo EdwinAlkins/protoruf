@@ -13,7 +13,7 @@ import datetime as dt
 import json
 
 import pytest
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from protoruf import (
     DescriptorCache,
@@ -23,6 +23,7 @@ from protoruf import (
     protobuf_to_pydantic,
     pydantic_to_protobuf,
 )
+from protoruf._pydantic import _plan
 
 SOURCE = """
 syntax = "proto3";
@@ -48,6 +49,11 @@ message Doc {
 message Node { bytes data = 1; Node next = 2; }
 
 message Plain { string id = 1; bool flag = 2; int64 count = 3; google.protobuf.Timestamp at = 4; }
+
+message Tree { google.protobuf.Timestamp when = 1; Tree child = 2; }
+
+message Outer { Inner inner = 1; }
+message Inner { Outer back = 1; bytes data = 2; }
 """
 
 DESCRIPTOR = compile_proto_from_sources({"p.proto": SOURCE}, root="p.proto")
@@ -82,6 +88,28 @@ class Plain(BaseModel):
     flag: bool
     count: int
     at: dt.datetime | None = None
+
+
+class Tree(BaseModel):
+    """Recursive, strict, without `bytes`: must keep the JSON path (strict validation of
+    a datetime from Python data would refuse the string)."""
+
+    model_config = ConfigDict(strict=True)
+
+    when: dt.datetime
+    child: Tree | None = None
+
+
+class Outer(BaseModel):
+    inner: Inner | None = None
+
+
+class Inner(BaseModel):
+    back: Outer | None = None
+    data: bytes = b""
+
+
+Outer.model_rebuild()  # `Inner` is defined after `Outer`
 
 
 def both_paths(model: BaseModel, message_type: str) -> list[BaseModel]:
@@ -143,6 +171,22 @@ def test_model_without_bytes_keeps_json_path():
     plain = Plain(id="", flag=False, count=0, at=dt.datetime(2024, 1, 1, tzinfo=dt.timezone.utc))
     for result in both_paths(plain, "p.Plain"):
         assert result == plain
+
+
+def test_recursive_model_without_bytes_keeps_json_path():
+    at = dt.datetime(2026, 10, 29, tzinfo=dt.timezone.utc)
+    tree = Tree(when=at, child=Tree(when=at))
+    assert _plan(Tree) == {}
+    for result in both_paths(tree, "p.Tree"):
+        assert result == tree
+
+
+def test_mutual_recursion_plans_only_models_with_bytes():
+    assert _plan(Outer) == {"inner": ("model", Inner)}
+    assert _plan(Inner) == {"back": ("model", Outer), "data": "bytes"}
+    outer = Outer(inner=Inner(data=BINARY, back=Outer(inner=Inner(data=b"\xff"))))
+    for result in both_paths(outer, "p.Outer"):
+        assert result == outer
 
 
 def test_protobuf_to_json_still_omits_defaults_by_default():
