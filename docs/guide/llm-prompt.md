@@ -48,6 +48,7 @@ from protoruf import (
     protobuf_to_pydantic,
     DescriptorCache,
     Schema,
+    Codec,
 )
 ```
 
@@ -166,6 +167,22 @@ Frozen dataclasses describe every element: `MessageInfo.fields` (declaration ord
 include nested ones and map entries (`is_map_entry=True`). Comments need
 `source_info=True` at compile time; unknown names raise `KeyError`.
 
+### `Codec` (protobuf ↔ Python objects, no JSON — the fastest path)
+
+```python
+codec = Schema(descriptor).codec(
+    "pkg.Message", Model,                       # Model: Pydantic class, or None for dicts
+    mode="validate",                            # or "construct" (no validation), "dict"
+    field_names={"pkg.Message": {3: "from_"}},  # only when a Python name differs
+)
+data: bytes = codec.encode(instance_or_dict)
+instance = codec.decode(data)
+```
+Proto3 semantics (zero values omitted, filled back on decode; `None` = absent for
+`optional`, messages and oneof members). Timestamp ↔ aware `datetime`, Duration ↔
+`timedelta`, `google.type.Date` ↔ `date`, Struct ↔ `dict`, wrappers ↔ scalar or `None`.
+Two members of a oneof set at once → `ValueError`. Bytes identical to `google.protobuf`.
+
 ## Canonical examples
 
 ### Minimal round-trip (from disk)
@@ -266,6 +283,7 @@ validating JSON for it, follow these rules exactly:
 3. In the browser there is no filesystem — but this is the **Python** target, so
    `compile_proto(path)` is available and fine here.
 4. For more than a few conversions, build one `DescriptorCache` and reuse it;
-   don't call the free functions in a tight loop.
+   don't call the free functions in a tight loop. To go between protobuf bytes and
+   Pydantic models, prefer `Schema(descriptor).codec(...)`: no JSON step at all.
 5. Emit JSON in protoruf's shape (snake_case fields, numeric enums, numeric
    64-bit ints) — do not assume canonical camelCase protobuf JSON.

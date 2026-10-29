@@ -2,6 +2,7 @@
 from typing import Type, TypeVar
 
 from . import _protoruf
+from ._protoruf import Codec
 from ._native import OpenIntEnum
 from ._pydantic import model_from_json, model_to_json
 from .compiler import compile_proto, load_descriptor, compile_proto_from_sources, compile_protos
@@ -21,11 +22,12 @@ __all__ = [
     "compile_protos",
     "protobuf_to_pydantic",
     "pydantic_to_protobuf",
+    "Codec",
     "DescriptorCache",
     "OpenIntEnum",
     "Schema",
 ]
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 class DescriptorCache:
     """Pre-decoded descriptor pool.

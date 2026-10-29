@@ -299,6 +299,46 @@ class Schema:
 
     # -------------------------------------------------- gRPC server reflection
 
+    def codec(
+        self,
+        message_type: str,
+        model: type | None = None,
+        *,
+        mode: Literal["validate", "construct", "dict"] = "validate",
+        field_names: Mapping[str, Mapping[int, str]] | None = None,
+        unknown_enum: Literal["keep", "error"] = "keep",
+        naive_datetime: Literal["error", "utc"] = "error",
+    ) -> "_protoruf.Codec":
+        """A codec for one message type of the schema (see `protoruf.Codec`).
+
+        Args:
+            message_type: Full name of the message, e.g. "orders.v1.Order"
+            model: Pydantic model to decode into (None: plain dicts)
+            mode: "validate" (decode then validate with the model), "construct"
+                (build instances without validation) or "dict" (ignore the model)
+            field_names: {message full name: {field number: Python name}}, for
+                fields whose Python name differs from the proto one, in any
+                message of the tree
+            unknown_enum: "keep" (open enums) or "error"
+            naive_datetime: "error" or "utc" (how to read a naive datetime when
+                encoding a Timestamp)
+        """
+        self.message(message_type)  # a clear KeyError for an unknown type
+        names = (
+            {message: dict(fields) for message, fields in field_names.items()}
+            if field_names
+            else None
+        )
+        return _protoruf.Codec(
+            self.descriptor,
+            message_type,
+            model,
+            mode=mode,
+            field_names=names,
+            unknown_enum=unknown_enum,
+            naive_datetime=naive_datetime,
+        )
+
     def file_descriptor_proto(self, name: str) -> bytes:
         """The serialized `FileDescriptorProto` of one file, as reflection sends it."""
         if self._file_protos is None:
