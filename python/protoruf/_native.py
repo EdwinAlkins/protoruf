@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import enum
 import types
-from typing import Any, Union, cast, get_args, get_origin
+from typing import Any, Union, get_args, get_origin
 
 from pydantic import BaseModel
 from pydantic_core import PydanticUndefined
@@ -19,9 +19,11 @@ class OpenIntEnum(enum.IntEnum):
     """An `IntEnum` that accepts values it does not declare.
 
     Proto3 enums are open: a peer built from a newer schema may send a number this
-    side does not know. Instead of failing, the unknown number becomes a cached
-    pseudo-member named `UNRECOGNIZED_<n>`, which compares equal to the int, is
-    re-encoded unchanged, and is not listed when iterating the enum.
+    side does not know. Instead of failing, the unknown number becomes a pseudo-member
+    named `UNRECOGNIZED_<n>`, which compares equal to the int, is re-encoded unchanged,
+    and is not listed when iterating the enum. Pseudo-members are not cached, so a peer
+    sending many different numbers cannot make the class grow: compare them with `==`,
+    not `is`.
 
     Works with Pydantic validation (Python and JSON modes)::
 
@@ -39,8 +41,7 @@ class OpenIntEnum(enum.IntEnum):
         member = int.__new__(cls, value)
         member._name_ = f"UNRECOGNIZED_{value}"
         member._value_ = value
-        # The map is typed `dict[Any, Enum]`; every entry of this class is a member of it.
-        return cast(OpenIntEnum, cls._value2member_map_.setdefault(value, member))
+        return member
 
 
 def _target(annotation: Any) -> type | None:

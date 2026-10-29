@@ -282,11 +282,12 @@ class Codec:
 - **Proto3 semantics**: zero values of implicit-presence fields are not written and are
   filled back on decode; `optional` fields, messages and oneof members are `None` when
   absent; enums are open (an unknown number is kept as an int, or as a pseudo-member of an
-  `OpenIntEnum`) unless `unknown_enum="error"`.
+  `OpenIntEnum`, compared with `==`, not `is`) unless `unknown_enum="error"`, which refuses
+  undeclared numbers on decoding and on encoding.
 - **oneof**: encoding two members of a oneof raises `ValueError`; when decoding, the last
   member read wins, as in the reference implementations.
 - **Repeated singular messages** on the wire are merged (scalars from the last occurrence,
-  repeated fields concatenated, sub-messages merged).
+  repeated fields concatenated, sub-messages merged), in time linear in their size.
 
 | proto | Python |
 |-------|--------|
@@ -297,9 +298,10 @@ class Codec:
 | `google.protobuf.*Value` wrappers | the scalar, or `None` |
 | `google.protobuf.FieldMask` | `list[str]` |
 
-Decoding errors (truncated or malformed bytes, wrong wire types, invalid UTF-8, nesting
-deeper than 100) raise `ValueError`; encoding errors name the field. The encodings are
-byte-identical to `google.protobuf` (upb), checked by a differential test.
+Decoding errors (truncated or malformed bytes, field number 0 or above 2^29 − 1, groups,
+wrong wire types, invalid UTF-8, nesting deeper than 100) raise `ValueError`; encoding
+errors name the field. The encodings are byte-identical to `google.protobuf` (upb), checked
+by a differential test.
 
 #### Example
 

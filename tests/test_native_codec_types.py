@@ -232,9 +232,23 @@ def test_open_enum_keeps_unknown_values_in_both_modes():
         assert c.encode(decoded) == UNKNOWN
 
 
+def test_unknown_enum_values_are_not_cached():
+    c = codec("Painted", Painted)
+    before = len(Color._value2member_map_)
+    decoded = [c.decode(b"\x08" + bytes([n])) for n in range(3, 100)]
+    assert [v.color for v in decoded] == list(range(3, 100))
+    assert len(Color._value2member_map_) == before
+
+
 def test_unknown_enum_error_option():
+    strict = codec("Painted", unknown_enum="error")
     with pytest.raises(ValueError, match="unknown value 7 for enum k.Color"):
-        codec("Painted", unknown_enum="error").decode_dict(UNKNOWN)
+        strict.decode_dict(UNKNOWN)
+    with pytest.raises(ValueError, match="unknown value 7 for enum k.Color"):
+        strict.encode({"color": 7})
+    with pytest.raises(ValueError, match="unknown value 7 for enum k.Color"):
+        strict.encode({"color": 1, "palette": [Color(7)]})
+    assert strict.encode({"color": Color.BLUE}) == b"\x08\x02"
 
 
 def test_closed_enum_rejects_unknown_on_validation_but_keeps_int_on_construct():

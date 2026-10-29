@@ -13,10 +13,11 @@
 //! `field_names` (`{message full name: {field number: Python name}}`).
 
 use crate::descriptor_resolver::DescriptorResolver;
-use crate::native::plan::{CodecPlan, FieldPlan, FieldType, Scalar, Value, WellKnown};
+use crate::native::plan::{CodecPlan, EnumPlan, FieldPlan, FieldType, Scalar, Value, WellKnown};
 use crate::native::wire::{
-    WIRE_I64, WIRE_LEN, WIRE_VARINT, encode_tag, read_fixed32, read_fixed64, read_len, read_varint,
-    skip_field, unzigzag32, unzigzag64, write_len_delimited, write_varint, zigzag32, zigzag64,
+    WIRE_I64, WIRE_LEN, WIRE_VARINT, encode_tag, read_fixed32, read_fixed64, read_len, read_tag,
+    read_varint, skip_field, unzigzag32, unzigzag64, write_len_delimited, write_varint, zigzag32,
+    zigzag64,
 };
 use crate::native::wkt;
 use pyo3::exceptions::{PyTypeError, PyValueError};
@@ -27,7 +28,6 @@ use pyo3::types::{
     PyBool, PyBytes, PyDate, PyDateAccess, PyDateTime, PyDelta, PyDeltaAccess, PyDict, PyFloat,
     PyInt, PyList, PySet, PyString, PyTimeAccess, PyTuple, PyType, PyTzInfo, PyTzInfoAccess,
 };
-use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 
 /// `{message full name: {field number: Python name}}`.
@@ -257,9 +257,8 @@ fn read_seconds_nanos(payload: &[u8]) -> PyResult<(i64, i32)> {
     let (mut seconds, mut nanos) = (0i64, 0i32);
     let mut pos = 0;
     while pos < payload.len() {
-        let tag = read_varint(payload, &mut pos).map_err(decode_error)?;
-        let wire_type = (tag & 7) as u8;
-        match (tag >> 3, wire_type) {
+        let (number, wire_type) = read_tag(payload, &mut pos).map_err(decode_error)?;
+        match (number, wire_type) {
             (1, WIRE_VARINT) => {
                 seconds = read_varint(payload, &mut pos).map_err(decode_error)? as i64
             }
@@ -560,15 +559,14 @@ impl NativeCodec {
         let message = &self.messages[index];
         let fields = &message.fields;
         let mut slots: Vec<Slot<'py>> = (0..plan.fields.len()).map(|_| Slot::Empty).collect();
-        // Payloads of singular message fields: a field met twice is the merge of both,
-        // which is the decoding of their concatenation.
-        let mut payloads: Vec<(usize, Cow<'_, [u8]>)> = Vec::new();
+        // Payloads of singular message fields, decoded once the message is read: a field
+        // met several times is the merge of all, which is the decoding of their
+        // concatenation (decoding at each occurrence would be quadratic).
+        let mut pending: Pending<'_> = Vec::new();
 
         let mut pos = 0;
         while pos < data.len() {
-            let tag = read_varint(data, &mut pos).map_err(decode_error)?;
-            let number = (tag >> 3) as u32;
-            let wire_type = (tag & 7) as u8;
+            let (number, wire_type) = read_tag(data, &mut pos).map_err(decode_error)?;
             let Some(i) = plan.field_index(number) else {
                 skip_field(data, &mut pos, wire_type).map_err(decode_error)?;
                 continue;
@@ -576,26 +574,16 @@ impl NativeCodec {
             let field = &plan.fields[i];
             let py_field = &fields[i];
             match field.ty {
-                FieldType::Single(value @ (Value::Message(_) | Value::WellKnown(_)))
+                FieldType::Single(Value::Message(_) | Value::WellKnown(_))
                     if wire_type == WIRE_LEN =>
                 {
                     let payload = read_len(data, &mut pos).map_err(decode_error)?;
-                    let merged = match payloads.iter_mut().find(|(f, _)| *f == i) {
-                        Some((_, previous)) => {
-                            let mut joined = previous.to_vec();
-                            joined.extend_from_slice(payload);
-                            *previous = Cow::Owned(joined);
-                            previous.clone()
-                        }
-                        None => {
-                            payloads.push((i, Cow::Borrowed(payload)));
-                            Cow::Borrowed(payload)
-                        }
-                    };
-                    slots[i] =
-                        Slot::Value(self.read_payload(py, value, &merged, depth, construct)?);
+                    match pending.iter_mut().find(|(f, _, _)| *f == i) {
+                        Some((_, _, later)) => later.push(payload),
+                        None => pending.push((i, payload, Vec::new())),
+                    }
                     if let Some(group) = field.oneof {
-                        clear_oneof(&plan.oneofs[group].fields, i, &mut slots, &mut payloads);
+                        clear_oneof(&plan.oneofs[group].fields, i, &mut slots, &mut pending);
                     }
                 }
                 FieldType::Single(value) => {
@@ -603,7 +591,7 @@ impl NativeCodec {
                         py, value, wire_type, data, &mut pos, depth, py_field, construct,
                     )?);
                     if let Some(group) = field.oneof {
-                        clear_oneof(&plan.oneofs[group].fields, i, &mut slots, &mut payloads);
+                        clear_oneof(&plan.oneofs[group].fields, i, &mut slots, &mut pending);
                     }
                 }
                 FieldType::Repeated { value, .. } => {
@@ -647,6 +635,22 @@ impl NativeCodec {
                     map.set_item(k, v)?;
                 }
             }
+        }
+
+        for (i, first, later) in pending {
+            let FieldType::Single(value) = plan.fields[i].ty else {
+                unreachable!("only singular message fields are pending")
+            };
+            let decoded = if later.is_empty() {
+                self.read_payload(py, value, first, depth, construct)?
+            } else {
+                let mut merged = first.to_vec();
+                later
+                    .iter()
+                    .for_each(|payload| merged.extend_from_slice(payload));
+                self.read_payload(py, value, &merged, depth, construct)?
+            };
+            slots[i] = Slot::Value(decoded);
         }
 
         let binding = message.construct.as_ref().filter(|_| construct);
@@ -931,9 +935,8 @@ impl NativeCodec {
         let mut v = None;
         let mut pos = 0;
         while pos < entry.len() {
-            let tag = read_varint(entry, &mut pos).map_err(decode_error)?;
-            let wire_type = (tag & 7) as u8;
-            match tag >> 3 {
+            let (number, wire_type) = read_tag(entry, &mut pos).map_err(decode_error)?;
+            match number {
                 1 => {
                     k = Some(self.read_value(
                         py,
@@ -1006,9 +1009,8 @@ impl NativeCodec {
                 let mut value = None;
                 let mut pos = 0;
                 while pos < payload.len() {
-                    let tag = read_varint(payload, &mut pos).map_err(decode_error)?;
-                    let wire_type = (tag & 7) as u8;
-                    if tag >> 3 == 1 && wire_type == scalar.wire_type() {
+                    let (number, wire_type) = read_tag(payload, &mut pos).map_err(decode_error)?;
+                    if number == 1 && wire_type == scalar.wire_type() {
                         value = Some(read_plain_scalar(py, scalar, payload, &mut pos)?);
                     } else {
                         skip_field(payload, &mut pos, wire_type).map_err(decode_error)?;
@@ -1020,9 +1022,8 @@ impl NativeCodec {
                 let paths = PyList::empty(py);
                 let mut pos = 0;
                 while pos < payload.len() {
-                    let tag = read_varint(payload, &mut pos).map_err(decode_error)?;
-                    let wire_type = (tag & 7) as u8;
-                    if tag >> 3 == 1 && wire_type == WIRE_LEN {
+                    let (number, wire_type) = read_tag(payload, &mut pos).map_err(decode_error)?;
+                    if number == 1 && wire_type == WIRE_LEN {
                         paths.append(read_plain_scalar(py, Scalar::String, payload, &mut pos)?)?;
                     } else {
                         skip_field(payload, &mut pos, wire_type).map_err(decode_error)?;
@@ -1037,9 +1038,8 @@ impl NativeCodec {
                 let (mut year, mut month, mut day) = (0i32, 0i32, 0i32);
                 let mut pos = 0;
                 while pos < payload.len() {
-                    let tag = read_varint(payload, &mut pos).map_err(decode_error)?;
-                    let wire_type = (tag & 7) as u8;
-                    let target = match (tag >> 3, wire_type) {
+                    let (number, wire_type) = read_tag(payload, &mut pos).map_err(decode_error)?;
+                    let target = match (number, wire_type) {
                         (1, WIRE_VARINT) => &mut year,
                         (2, WIRE_VARINT) => &mut month,
                         (3, WIRE_VARINT) => &mut day,
@@ -1073,9 +1073,8 @@ impl NativeCodec {
         let dict = PyDict::new(py);
         let mut pos = 0;
         while pos < payload.len() {
-            let tag = read_varint(payload, &mut pos).map_err(decode_error)?;
-            let wire_type = (tag & 7) as u8;
-            if tag >> 3 != 1 || wire_type != WIRE_LEN {
+            let (number, wire_type) = read_tag(payload, &mut pos).map_err(decode_error)?;
+            if number != 1 || wire_type != WIRE_LEN {
                 skip_field(payload, &mut pos, wire_type).map_err(decode_error)?;
                 continue;
             }
@@ -1083,9 +1082,8 @@ impl NativeCodec {
             let (mut key, mut value) = (None, None);
             let mut p = 0;
             while p < entry.len() {
-                let tag = read_varint(entry, &mut p).map_err(decode_error)?;
-                let wire_type = (tag & 7) as u8;
-                match (tag >> 3, wire_type) {
+                let (number, wire_type) = read_tag(entry, &mut p).map_err(decode_error)?;
+                match (number, wire_type) {
                     (1, WIRE_LEN) => {
                         key = Some(read_plain_scalar(py, Scalar::String, entry, &mut p)?)
                     }
@@ -1117,9 +1115,8 @@ impl NativeCodec {
         let mut value = py.None().into_bound(py);
         let mut pos = 0;
         while pos < payload.len() {
-            let tag = read_varint(payload, &mut pos).map_err(decode_error)?;
-            let wire_type = (tag & 7) as u8;
-            value = match (tag >> 3, wire_type) {
+            let (number, wire_type) = read_tag(payload, &mut pos).map_err(decode_error)?;
+            value = match (number, wire_type) {
                 (1, WIRE_VARINT) => {
                     read_varint(payload, &mut pos).map_err(decode_error)?;
                     py.None().into_bound(py)
@@ -1154,9 +1151,8 @@ impl NativeCodec {
         let list = PyList::empty(py);
         let mut pos = 0;
         while pos < payload.len() {
-            let tag = read_varint(payload, &mut pos).map_err(decode_error)?;
-            let wire_type = (tag & 7) as u8;
-            if tag >> 3 == 1 && wire_type == WIRE_LEN {
+            let (number, wire_type) = read_tag(payload, &mut pos).map_err(decode_error)?;
+            if number == 1 && wire_type == WIRE_LEN {
                 let inner = read_len(payload, &mut pos).map_err(decode_error)?;
                 list.append(self.read_json_value(py, inner, depth + 1)?)?;
             } else {
@@ -1356,13 +1352,25 @@ impl NativeCodec {
 
     /// The number of an enum value given as an int, an `IntEnum`, an `Enum` whose
     /// value is an int, or a declared proto name (as a str, an `Enum` value or an
-    /// `Enum` member name).
+    /// `Enum` member name). With `unknown_enum="error"`, an undeclared number is refused,
+    /// as on decoding.
     fn enum_number(&self, index: u32, value: &Bound<'_, PyAny>) -> PyResult<i32> {
+        let plan = &self.plan.enums[index as usize];
+        let number = Self::any_enum_number(plan, value)?;
+        if self.strict_enums && !plan.contains(number) {
+            return Err(PyValueError::new_err(format!(
+                "unknown value {number} for enum {}",
+                plan.full_name
+            )));
+        }
+        Ok(number)
+    }
+
+    fn any_enum_number(plan: &EnumPlan, value: &Bound<'_, PyAny>) -> PyResult<i32> {
         if let Ok(number) = value.extract::<i32>() {
             return Ok(number);
         }
         let py = value.py();
-        let plan = &self.plan.enums[index as usize];
         let mut candidates = vec![value.clone()];
         if let Ok(inner) = value.getattr(intern!(py, "value")) {
             if let Ok(number) = inner.extract::<i32>() {
@@ -1604,17 +1612,16 @@ impl NativeCodec {
     }
 }
 
+/// Payloads of singular message fields still to decode: (field, first payload, later
+/// payloads). The usual single occurrence needs no allocation.
+type Pending<'a> = Vec<(usize, &'a [u8], Vec<&'a [u8]>)>;
+
 /// A oneof member was just read: the other members of its group are unset.
-fn clear_oneof(
-    members: &[usize],
-    set: usize,
-    slots: &mut [Slot<'_>],
-    payloads: &mut Vec<(usize, Cow<'_, [u8]>)>,
-) {
+fn clear_oneof(members: &[usize], set: usize, slots: &mut [Slot<'_>], pending: &mut Pending<'_>) {
     for &member in members.iter().filter(|&&m| m != set) {
         slots[member] = Slot::Empty;
     }
-    payloads.retain(|(field, _)| *field == set || !members.contains(field));
+    pending.retain(|(field, _, _)| *field == set || !members.contains(field));
 }
 
 fn write_seconds_nanos(buf: &mut Vec<u8>, seconds: i64, nanos: i32) {

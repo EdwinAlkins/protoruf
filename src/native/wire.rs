@@ -44,6 +44,25 @@ pub fn read_fixed64(data: &[u8], pos: &mut usize) -> Result<u64, String> {
     Ok(u64::from_le_bytes(bytes.try_into().unwrap()))
 }
 
+/// Largest field number protobuf allows.
+pub const MAX_FIELD_NUMBER: u64 = (1 << 29) - 1;
+
+/// Read a field tag at `*pos`: its number (1 to 2^29 - 1) and wire type. Groups (wire
+/// types 3 and 4) are not supported, so only 0, 1, 2 and 5 are accepted.
+#[inline]
+pub fn read_tag(data: &[u8], pos: &mut usize) -> Result<(u32, u8), String> {
+    let tag = read_varint(data, pos)?;
+    let number = tag >> 3;
+    if number == 0 || number > MAX_FIELD_NUMBER {
+        return Err(format!("invalid field number {number}"));
+    }
+    let wire_type = (tag & 7) as u8;
+    if !matches!(wire_type, WIRE_VARINT | WIRE_I64 | WIRE_LEN | WIRE_I32) {
+        return Err(format!("unsupported wire type {wire_type}"));
+    }
+    Ok((number as u32, wire_type))
+}
+
 /// Read a length prefix and return the delimited slice.
 #[inline]
 pub fn read_len<'a>(data: &'a [u8], pos: &mut usize) -> Result<&'a [u8], String> {
@@ -187,6 +206,24 @@ mod tests {
             assert_eq!(payload.len(), size);
             assert!(payload.iter().all(|&b| b == 7));
             assert_eq!(pos, buf.len());
+        }
+    }
+
+    #[test]
+    fn tags_are_checked() {
+        let read = |tag: u64| {
+            let mut buf = Vec::new();
+            write_varint(&mut buf, tag);
+            read_tag(&buf, &mut 0)
+        };
+        assert_eq!(read(encode_tag(1, WIRE_LEN)), Ok((1, WIRE_LEN)));
+        let max = MAX_FIELD_NUMBER as u32;
+        assert_eq!(read(encode_tag(max, WIRE_I32)), Ok((max, WIRE_I32)));
+        assert!(read(0).is_err()); // field number 0
+        assert!(read((MAX_FIELD_NUMBER + 1) << 3).is_err());
+        assert!(read(((1u64 << 32) + 1) << 3).is_err()); // used to truncate to field 1
+        for wire_type in [3, 4, 6, 7] {
+            assert!(read((1 << 3) | wire_type).is_err());
         }
     }
 
