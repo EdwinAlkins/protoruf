@@ -185,5 +185,7 @@ fn _protoruf(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(protobuf_to_json, m)?)?;
     m.add_class::<DescriptorCache>()?;
     m.add_class::<crate::python_native::NativeCodec>()?;
+    // Name of the class during the 0.3 / 0.4 experimental phase.
+    m.add("NativeCodec", m.getattr("Codec")?)?;
     Ok(())
 }

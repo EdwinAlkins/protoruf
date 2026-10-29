@@ -213,6 +213,7 @@ class Schema:
     def message(self, full_name: str) -> MessageInfo: ...
     def enum(self, full_name: str) -> EnumInfo: ...
     def service(self, full_name: str) -> ServiceInfo: ...
+    def codec(self, message_type: str, model: type | None = None, **options) -> Codec: ...
     # gRPC server reflection
     def file_descriptor_proto(self, name: str) -> bytes: ...
     def file_containing_symbol(self, symbol: str) -> str | None: ...
@@ -245,6 +246,79 @@ for field in order.fields:
 
 schema.file_containing_symbol("orders.v1.Orders.GetOrder")  # "orders/v1/orders.proto"
 ```
+
+---
+
+### `Codec`
+
+Protobuf bytes ↔ Python objects and Pydantic models, **without JSON**. One codec per
+message type, built once (the descriptor is resolved and every nested message planned when
+the codec is created), then reused.
+
+```python
+schema.codec(
+    message_type: str,                      # "orders.v1.Order"
+    model: type | None = None,              # Pydantic model; None: plain dicts
+    *,
+    mode: Literal["validate", "construct", "dict"] = "validate",
+    field_names: Mapping[str, Mapping[int, str]] | None = None,
+    unknown_enum: Literal["keep", "error"] = "keep",
+    naive_datetime: Literal["error", "utc"] = "error",
+) -> Codec
+
+class Codec:
+    def encode(self, obj: BaseModel | dict) -> bytes: ...
+    def decode(self, data: bytes) -> Any: ...        # model instance, or dict
+    def decode_dict(self, data: bytes) -> dict: ...  # always plain dicts
+```
+
+- **`mode`**: `"validate"` decodes into dicts then validates them with the model (by field
+  name, so aliases do not get in the way); `"construct"` builds model instances directly,
+  nested models and enum members included, without validation (like `model_construct`,
+  about 2× faster); `"dict"` ignores the model.
+- **`field_names`**: `{message full name: {field number: Python name}}` for fields whose
+  Python name differs from the proto one, in any message of the tree (`from` → `from_`).
+- **Encoding** reads a model instance through its `__dict__` (no `model_dump`), or a dict.
+- **Proto3 semantics**: zero values of implicit-presence fields are not written and are
+  filled back on decode; `optional` fields, messages and oneof members are `None` when
+  absent; enums are open (an unknown number is kept as an int, or as a pseudo-member of an
+  `OpenIntEnum`) unless `unknown_enum="error"`.
+- **oneof**: encoding two members of a oneof raises `ValueError`; when decoding, the last
+  member read wins, as in the reference implementations.
+- **Repeated singular messages** on the wire are merged (scalars from the last occurrence,
+  repeated fields concatenated, sub-messages merged).
+
+| proto | Python |
+|-------|--------|
+| `google.protobuf.Timestamp` | aware `datetime.datetime` (UTC); naive refused unless `naive_datetime="utc"` |
+| `google.protobuf.Duration` | `datetime.timedelta` |
+| `google.type.Date` | `datetime.date` (a partial date, with a zero month or day, raises) |
+| `google.protobuf.Struct` / `Value` / `ListValue` | `dict` / JSON value / `list` |
+| `google.protobuf.*Value` wrappers | the scalar, or `None` |
+| `google.protobuf.FieldMask` | `list[str]` |
+
+Decoding errors (truncated or malformed bytes, wrong wire types, invalid UTF-8, nesting
+deeper than 100) raise `ValueError`; encoding errors name the field. The encodings are
+byte-identical to `google.protobuf` (upb), checked by a differential test.
+
+#### Example
+
+```python
+from pydantic import BaseModel
+from protoruf import Schema, compile_protos
+
+class Order(BaseModel):
+    order_number: str = ""
+    from_: str = ""
+
+schema = Schema(compile_protos(["orders/v1/orders.proto"], ["proto"]))
+codec = schema.codec("orders.v1.Order", Order, field_names={"orders.v1.Order": {2: "from_"}})
+data = codec.encode(Order(order_number="A", from_="Paris"))
+assert codec.decode(data) == Order(order_number="A", from_="Paris")
+```
+
+`NativeCodec` (the class's name in 0.3 and 0.4) remains available from
+`protoruf._protoruf`.
 
 ---
 
@@ -582,6 +656,7 @@ __all__ = [
     "compile_protos",
     "protobuf_to_pydantic",
     "pydantic_to_protobuf",
+    "Codec",
     "DescriptorCache",
     "OpenIntEnum",
     "Schema",

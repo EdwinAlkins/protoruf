@@ -62,8 +62,11 @@ class DescriptorCache:
     ) -> str: ...
 
 
-class NativeCodec:
-    """Spike: protobuf bytes <-> Python objects without JSON (API not final)."""
+class Codec:
+    """Protobuf bytes <-> Python objects and Pydantic models, without JSON.
+
+    Usually created with `Schema(descriptor).codec("pkg.Message", Model)`.
+    """
 
     def __init__(
         self,
@@ -71,10 +74,14 @@ class NativeCodec:
         message_type: str,
         model: type | None = None,
         *,
-        mode: Literal["validate", "construct"] = "validate",
+        mode: Literal["validate", "construct", "dict"] = "validate",
+        field_names: dict[str, dict[int, str]] | None = None,
         unknown_enum: Literal["keep", "error"] = "keep",
         naive_datetime: Literal["error", "utc"] = "error",
     ) -> None: ...
     def decode(self, data: bytes) -> Any: ...
     def decode_dict(self, data: bytes) -> dict[str, Any]: ...
     def encode(self, obj: Any) -> bytes: ...
+
+#: Name of `Codec` in protoruf 0.3 and 0.4 (experimental).
+NativeCodec = Codec

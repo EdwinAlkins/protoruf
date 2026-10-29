@@ -5,6 +5,46 @@ All notable changes to **protoruf** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - Pending
+
+### Added
+
+- **`Codec`**, the native codec's public API (`protoruf.Codec`), created with
+  `Schema(descriptor).codec(message_type, model, *, mode, field_names, unknown_enum,
+  naive_datetime)`. `NativeCodec` (0.3 / 0.4) remains as an alias in `protoruf._protoruf`.
+- `mode="dict"`: plain dicts even when a model is given.
+- `field_names={message full name: {field number: Python name}}`: Python names that
+  differ from the proto ones, in every message of the tree (`from` → `from_`), in every
+  mode.
+- `google.type.Date` ↔ `datetime.date`. Encoding also takes the `{"year", "month",
+  "day"}` dict of 0.4; a `datetime` is refused rather than losing its time.
+
+### Changed
+
+- **`google.type.Date` decodes to `datetime.date`** instead of a `{"year", "month",
+  "day"}` dict; a partial date (zero month or day) raises `ValueError`.
+- Validated decoding passes `by_name=True` to Pydantic: models whose fields have aliases
+  decode without needing `populate_by_name`.
+- **oneof**: encoding two members of the same oneof raises `ValueError`; decoding keeps the
+  last member read and unsets the others, as the reference implementations do.
+
+### Fixed
+
+- A singular message field that appears several times on the wire is merged (scalars from
+  the last occurrence, repeated fields concatenated, sub-messages merged recursively),
+  instead of keeping only the last occurrence.
+
+### Tests & CI
+
+- Differential test against `google.protobuf` (upb): 400 seeded random messages covering
+  every scalar type and its bounds, open enums, packed and unpacked lists, maps, nesting,
+  oneofs and well-known types; bytes identical (map entries compared as a set) and decoded
+  back to the same values.
+- Robustness test: random and mutated inputs through every decoding mode raise
+  `ValueError` and never panic; nesting deeper than 100 is refused.
+- The Python CI installs the `benchmark` group (protobuf), so the tests that compare with
+  `google.protobuf` run instead of being skipped.
+
 ## [0.4.0] - 2026-10-29
 
 ### Added

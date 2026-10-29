@@ -23,7 +23,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies (dev group)
-        run: uv sync --group dev
+        run: uv sync --group dev --group benchmark  # benchmark: protobuf, for the differential tests
       - name: Build & install the extension module
         run: uv run maturin develop
       - name: Run pytest

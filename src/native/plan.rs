@@ -53,6 +53,8 @@ pub enum WellKnown {
     FieldMask,
     /// `google.protobuf.*Value` wrappers: the wrapped scalar, or nothing.
     Wrapper(Scalar),
+    /// `google.type.Date`: a calendar date.
+    Date,
 }
 
 impl WellKnown {
@@ -73,6 +75,7 @@ impl WellKnown {
             "google.protobuf.BoolValue" => WellKnown::Wrapper(Scalar::Bool),
             "google.protobuf.StringValue" => WellKnown::Wrapper(Scalar::String),
             "google.protobuf.BytesValue" => WellKnown::Wrapper(Scalar::Bytes),
+            "google.type.Date" => WellKnown::Date,
             _ => return None,
         })
     }
@@ -125,6 +128,17 @@ pub struct FieldPlan {
     /// zero values are still written. Otherwise zero values are omitted on encode
     /// and filled back on decode.
     pub explicit_presence: bool,
+    /// Index in [`MessagePlan::oneofs`] of the (real, not `optional`) oneof holding
+    /// the field.
+    pub oneof: Option<usize>,
+}
+
+/// A `oneof` group: at most one of its fields is set.
+#[derive(Clone, Debug)]
+pub struct OneofPlan {
+    pub name: String,
+    /// Indices of the member fields in [`MessagePlan::fields`].
+    pub fields: Vec<usize>,
 }
 
 #[derive(Clone, Debug)]
@@ -132,6 +146,7 @@ pub struct MessagePlan {
     pub full_name: String,
     /// Sorted by field number, which is also the canonical encoding order.
     pub fields: Vec<FieldPlan>,
+    pub oneofs: Vec<OneofPlan>,
     by_number: NumberIndex,
 }
 
@@ -200,14 +215,28 @@ impl Builder {
         self.messages.push(MessagePlan {
             full_name: desc.full_name().to_string(),
             fields: Vec::new(),
+            oneofs: Vec::new(),
             by_number: NumberIndex::Sparse(HashMap::new()),
         });
 
+        let mut oneofs: Vec<OneofPlan> = desc
+            .oneofs()
+            .filter(|oneof| !oneof.is_synthetic())
+            .map(|oneof| OneofPlan {
+                name: oneof.name().to_string(),
+                fields: Vec::new(),
+            })
+            .collect();
         let mut fields = desc
             .fields()
-            .map(|field| self.field(&field))
+            .map(|field| self.field(&field, &oneofs))
             .collect::<Result<Vec<_>, _>>()?;
         fields.sort_by_key(|f| f.number);
+        for (i, field) in fields.iter().enumerate() {
+            if let Some(group) = field.oneof {
+                oneofs[group].fields.push(i);
+            }
+        }
 
         let max = fields.last().map_or(0, |f| f.number);
         let by_number = if max < DENSE_LIMIT {
@@ -228,6 +257,7 @@ impl Builder {
 
         let plan = &mut self.messages[index];
         plan.fields = fields;
+        plan.oneofs = oneofs;
         plan.by_number = by_number;
         Ok(index)
     }
@@ -271,7 +301,11 @@ impl Builder {
         index
     }
 
-    fn field(&mut self, field: &FieldDescriptor) -> Result<FieldPlan, String> {
+    fn field(
+        &mut self,
+        field: &FieldDescriptor,
+        oneofs: &[OneofPlan],
+    ) -> Result<FieldPlan, String> {
         let ty = if field.is_map() {
             let Kind::Message(entry) = field.kind() else {
                 return Err(format!("map field {} has no entry type", field.full_name()));
@@ -288,11 +322,16 @@ impl Builder {
         } else {
             FieldType::Single(self.value(&field.kind())?)
         };
+        let oneof = field
+            .containing_oneof()
+            .filter(|oneof| !oneof.is_synthetic())
+            .and_then(|oneof| oneofs.iter().position(|o| o.name == oneof.name()));
         Ok(FieldPlan {
             name: field.name().to_string(),
             number: field.number(),
             ty,
             explicit_presence: field.supports_presence(),
+            oneof,
         })
     }
 }
@@ -332,8 +371,14 @@ mod tests {
     use crate::core;
     use std::collections::HashMap as Map;
 
+    const DATE_PROTO: &str = r#"syntax = "proto3"; package google.type;
+        message Date { int32 year = 1; int32 month = 2; int32 day = 3; }"#;
+
     fn plan_for(source: &str, message: &str) -> CodecPlan {
-        let files = Map::from([("t.proto".to_string(), source.to_string())]);
+        let files = Map::from([
+            ("t.proto".to_string(), source.to_string()),
+            ("google/type/date.proto".to_string(), DATE_PROTO.to_string()),
+        ]);
         let bytes = core::compile_proto_from_sources(files, "t.proto", true).unwrap();
         let pool = core::load_descriptor_pool(&bytes).unwrap();
         CodecPlan::build(&core::get_message_descriptor(&pool, message).unwrap()).unwrap()
@@ -427,6 +472,32 @@ mod tests {
         assert_eq!(color.number_of("COLOR_RED"), Some(1));
         assert_eq!(color.number_of("COLOR_ROUGE"), Some(1));
         assert_eq!(color.number_of("RED"), None);
+    }
+
+    #[test]
+    fn plans_real_oneofs_and_dates() {
+        let plan = plan_for(
+            r#"syntax = "proto3"; package t;
+               import "google/type/date.proto";
+               message Root {
+                 optional string note = 1;
+                 oneof payment { string iban = 3; string card = 2; }
+                 google.type.Date due = 4;
+               }"#,
+            "t.Root",
+        );
+        let root = &plan.messages[0];
+        // `optional` is a synthetic oneof: not a group.
+        assert_eq!(root.oneofs.len(), 1);
+        assert_eq!(root.oneofs[0].name, "payment");
+        // Members by index after sorting by number: card (2) then iban (3).
+        assert_eq!(root.oneofs[0].fields, [1, 2]);
+        assert_eq!(root.fields[0].oneof, None);
+        assert_eq!(root.fields[1].oneof, Some(0));
+        assert!(matches!(
+            root.fields[3].ty,
+            FieldType::Single(Value::WellKnown(WellKnown::Date))
+        ));
     }
 
     #[test]

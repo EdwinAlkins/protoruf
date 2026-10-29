@@ -1,16 +1,16 @@
 //! Python binding of the native codec: protobuf bytes <-> Python objects (dict,
-//! list, int, float, str, bytes, bool, datetime, timedelta) and Pydantic models,
-//! without JSON.
-//!
-//! SPIKE S1 — high-level PyO3 calls only; raw `pyo3::ffi` in the hot loops is the
-//! next step.
+//! list, int, float, str, bytes, bool, datetime, date, timedelta) and Pydantic
+//! models, without JSON.
 //!
 //! Decoding modes:
-//! - `decode_dict`: nested dicts, no Pydantic at all;
-//! - `decode` with `mode="validate"`: dicts validated by the model's pydantic-core
-//!   validator;
-//! - `decode` with `mode="construct"`: model instances built directly, nested models
-//!   and enum members included, without validation (like `model_construct`).
+//! - `mode="dict"` (or no model): nested dicts, no Pydantic at all;
+//! - `mode="validate"`: dicts validated by the model's pydantic-core validator, by
+//!   field name;
+//! - `mode="construct"`: model instances built directly, nested models and enum
+//!   members included, without validation (like `model_construct`).
+//!
+//! Field names: the proto name by default, or the Python name given in
+//! `field_names` (`{message full name: {field number: Python name}}`).
 
 use crate::descriptor_resolver::DescriptorResolver;
 use crate::native::plan::{CodecPlan, FieldPlan, FieldType, Scalar, Value, WellKnown};
@@ -24,10 +24,14 @@ use pyo3::ffi;
 use pyo3::intern;
 use pyo3::prelude::*;
 use pyo3::types::{
-    PyBool, PyBytes, PyDateAccess, PyDateTime, PyDelta, PyDeltaAccess, PyDict, PyFloat, PyInt,
-    PyList, PySet, PyString, PyTimeAccess, PyTuple, PyType, PyTzInfo, PyTzInfoAccess,
+    PyBool, PyBytes, PyDate, PyDateAccess, PyDateTime, PyDelta, PyDeltaAccess, PyDict, PyFloat,
+    PyInt, PyList, PySet, PyString, PyTimeAccess, PyTuple, PyType, PyTzInfo, PyTzInfoAccess,
 };
-use std::collections::HashSet;
+use std::borrow::Cow;
+use std::collections::{HashMap, HashSet};
+
+/// `{message full name: {field number: Python name}}`.
+type FieldNames = HashMap<String, HashMap<u32, String>>;
 
 /// Same nesting limit as the reference protobuf implementations.
 const MAX_DEPTH: u32 = 100;
@@ -41,6 +45,7 @@ const DEFAULT_FACTORY: u8 = 2;
 enum Mode {
     Validate,
     Construct,
+    Dict,
 }
 
 /// Python-side data attached to each planned field.
@@ -103,6 +108,8 @@ type ConstructInfo<'py> = (bool, bool, Vec<(String, u8, Bound<'py, PyAny>)>);
 struct PyCache {
     utc: Py<PyTzInfo>,
     deepcopy: Py<PyAny>,
+    /// `{"by_name": True}`: decoded dicts are keyed by field name, not alias.
+    by_name: Py<PyDict>,
 }
 
 /// A scalar value read from Python, ready to be written.
@@ -272,10 +279,13 @@ fn write_tag(buf: &mut Vec<u8>, number: u32, wire_type: u8) {
 /// Encode/decode one message type (and the types it references) natively.
 ///
 /// `model` is an optional Pydantic model class. Options:
-/// - `mode`: `"validate"` (default) or `"construct"` (no validation; needs `model`);
+/// - `mode`: `"validate"` (default), `"construct"` (no validation; needs `model`) or
+///   `"dict"` (plain dicts, the model is ignored);
+/// - `field_names`: `{message full name: {field number: Python name}}`, for fields
+///   whose Python name is not the proto one;
 /// - `unknown_enum`: `"keep"` (default, proto3 open enums) or `"error"`;
 /// - `naive_datetime`: `"error"` (default) or `"utc"` for `Timestamp` fields.
-#[pyclass(frozen, module = "protoruf._protoruf")]
+#[pyclass(frozen, name = "Codec", module = "protoruf._protoruf")]
 pub struct NativeCodec {
     plan: CodecPlan,
     messages: Vec<PyMessage>,
@@ -295,24 +305,28 @@ impl NativeCodec {
         model = None,
         *,
         mode = "validate",
+        field_names = None,
         unknown_enum = "keep",
         naive_datetime = "error",
     ))]
+    #[allow(clippy::too_many_arguments)]
     fn new(
         py: Python<'_>,
         descriptor_bytes: &[u8],
         message_type: &str,
         model: Option<&Bound<'_, PyAny>>,
         mode: &str,
+        field_names: Option<FieldNames>,
         unknown_enum: &str,
         naive_datetime: &str,
     ) -> PyResult<Self> {
         let mode = match mode {
             "validate" => Mode::Validate,
             "construct" => Mode::Construct,
+            "dict" => Mode::Dict,
             other => {
                 return Err(PyValueError::new_err(format!(
-                    "mode must be 'validate' or 'construct', got {other:?}"
+                    "mode must be 'validate', 'construct' or 'dict', got {other:?}"
                 )));
             }
         };
@@ -344,21 +358,30 @@ impl NativeCodec {
             .resolve(message_type)
             .map_err(PyValueError::new_err)?;
         let plan = CodecPlan::build(&descriptor).map_err(PyValueError::new_err)?;
+        let field_names = field_names.unwrap_or_default();
         let mut messages: Vec<PyMessage> = plan
             .messages
             .iter()
-            .map(|message| PyMessage {
-                fields: message
-                    .fields
-                    .iter()
-                    .map(|field| PyField {
-                        key: PyString::intern(py, &field.name).unbind(),
-                        zero: zero_value(py, field),
-                        enum_class: None,
-                        in_model: true,
-                    })
-                    .collect(),
-                construct: None,
+            .map(|message| {
+                let names = field_names.get(&message.full_name);
+                PyMessage {
+                    fields: message
+                        .fields
+                        .iter()
+                        .map(|field| {
+                            let name = names
+                                .and_then(|names| names.get(&field.number))
+                                .unwrap_or(&field.name);
+                            PyField {
+                                key: PyString::intern(py, name).unbind(),
+                                zero: zero_value(py, field),
+                                enum_class: None,
+                                in_model: true,
+                            }
+                        })
+                        .collect(),
+                    construct: None,
+                }
             })
             .collect();
 
@@ -374,12 +397,16 @@ impl NativeCodec {
                     );
                 }
                 Mode::Construct => bind_models(py, &plan, &mut messages, model)?,
+                Mode::Dict => {}
             }
         }
 
+        let by_name = PyDict::new(py);
+        by_name.set_item(intern!(py, "by_name"), true)?;
         let cache = PyCache {
             utc: PyTzInfo::utc(py)?.to_owned().unbind(),
             deepcopy: PyModule::import(py, "copy")?.getattr("deepcopy")?.unbind(),
+            by_name: by_name.unbind(),
         };
         Ok(Self {
             plan,
@@ -400,7 +427,9 @@ impl NativeCodec {
         }
         let dict = self.decode_message(py, 0, data, 0, false)?;
         match &self.validate {
-            Some(validate) => validate.bind(py).call1((dict,)),
+            Some(validate) => validate
+                .bind(py)
+                .call((dict,), Some(self.cache.by_name.bind(py))),
             None => Ok(dict),
         }
     }
@@ -447,7 +476,8 @@ fn bind_models(
         };
         let targets = targets.cast_into::<PyDict>()?;
         for (i, field) in plan.messages[index].fields.iter().enumerate() {
-            let Some(target) = targets.get_item(&field.name)? else {
+            let key = messages[index].fields[i].key.clone_ref(py);
+            let Some(target) = targets.get_item(key.bind(py))? else {
                 continue;
             };
             match field_value(field.ty) {
@@ -477,17 +507,18 @@ fn bind_models(
             .call_method1("construct_info", (&class,))?
             .extract()?;
         let names: HashSet<&str> = raw_defaults.iter().map(|(n, _, _)| n.as_str()).collect();
-        for (field, py_field) in plan.messages[index]
+        let keys: Vec<String> = messages[index]
             .fields
             .iter()
-            .zip(messages[index].fields.iter_mut())
-        {
-            py_field.in_model = names.contains(field.name.as_str());
+            .map(|f| f.key.bind(py).to_string())
+            .collect();
+        for (py_field, key) in messages[index].fields.iter_mut().zip(&keys) {
+            py_field.in_model = names.contains(key.as_str());
         }
         let same_order = raw_defaults
             .iter()
             .map(|(name, _, _)| name.as_str())
-            .eq(plan.messages[index].fields.iter().map(|f| f.name.as_str()));
+            .eq(keys.iter().map(String::as_str));
         let defaults = raw_defaults
             .iter()
             .map(|(name, kind, value)| {
@@ -529,6 +560,9 @@ impl NativeCodec {
         let message = &self.messages[index];
         let fields = &message.fields;
         let mut slots: Vec<Slot<'py>> = (0..plan.fields.len()).map(|_| Slot::Empty).collect();
+        // Payloads of singular message fields: a field met twice is the merge of both,
+        // which is the decoding of their concatenation.
+        let mut payloads: Vec<(usize, Cow<'_, [u8]>)> = Vec::new();
 
         let mut pos = 0;
         while pos < data.len() {
@@ -542,10 +576,35 @@ impl NativeCodec {
             let field = &plan.fields[i];
             let py_field = &fields[i];
             match field.ty {
+                FieldType::Single(value @ (Value::Message(_) | Value::WellKnown(_)))
+                    if wire_type == WIRE_LEN =>
+                {
+                    let payload = read_len(data, &mut pos).map_err(decode_error)?;
+                    let merged = match payloads.iter_mut().find(|(f, _)| *f == i) {
+                        Some((_, previous)) => {
+                            let mut joined = previous.to_vec();
+                            joined.extend_from_slice(payload);
+                            *previous = Cow::Owned(joined);
+                            previous.clone()
+                        }
+                        None => {
+                            payloads.push((i, Cow::Borrowed(payload)));
+                            Cow::Borrowed(payload)
+                        }
+                    };
+                    slots[i] =
+                        Slot::Value(self.read_payload(py, value, &merged, depth, construct)?);
+                    if let Some(group) = field.oneof {
+                        clear_oneof(&plan.oneofs[group].fields, i, &mut slots, &mut payloads);
+                    }
+                }
                 FieldType::Single(value) => {
                     slots[i] = Slot::Value(self.read_value(
                         py, value, wire_type, data, &mut pos, depth, py_field, construct,
                     )?);
+                    if let Some(group) = field.oneof {
+                        clear_oneof(&plan.oneofs[group].fields, i, &mut slots, &mut payloads);
+                    }
                 }
                 FieldType::Repeated { value, .. } => {
                     if !matches!(slots[i], Slot::List(_)) {
@@ -782,20 +841,29 @@ impl NativeCodec {
                 }
                 self.read_scalar(py, scalar, data, pos, field, construct)
             }
-            Value::Message(index) => {
+            Value::Message(_) | Value::WellKnown(_) => {
                 if wire_type != WIRE_LEN {
                     return Err(decode_error("message field is not length-delimited"));
                 }
                 let payload = read_len(data, pos).map_err(decode_error)?;
-                self.decode_message(py, index, payload, depth + 1, construct)
+                self.read_payload(py, value, payload, depth, construct)
             }
-            Value::WellKnown(wkt) => {
-                if wire_type != WIRE_LEN {
-                    return Err(decode_error("message field is not length-delimited"));
-                }
-                let payload = read_len(data, pos).map_err(decode_error)?;
-                self.read_wkt(py, wkt, payload, depth + 1)
-            }
+        }
+    }
+
+    /// Decode the payload of a message or well-known type field.
+    fn read_payload<'py>(
+        &self,
+        py: Python<'py>,
+        value: Value,
+        payload: &[u8],
+        depth: u32,
+        construct: bool,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        match value {
+            Value::Message(index) => self.decode_message(py, index, payload, depth + 1, construct),
+            Value::WellKnown(wkt) => self.read_wkt(py, wkt, payload, depth + 1),
+            Value::Scalar(_) => unreachable!("scalars have no payload"),
         }
     }
 
@@ -965,6 +1033,33 @@ impl NativeCodec {
             WellKnown::Struct => self.read_struct(py, payload, depth),
             WellKnown::Value => self.read_json_value(py, payload, depth),
             WellKnown::ListValue => self.read_list_value(py, payload, depth),
+            WellKnown::Date => {
+                let (mut year, mut month, mut day) = (0i32, 0i32, 0i32);
+                let mut pos = 0;
+                while pos < payload.len() {
+                    let tag = read_varint(payload, &mut pos).map_err(decode_error)?;
+                    let wire_type = (tag & 7) as u8;
+                    let target = match (tag >> 3, wire_type) {
+                        (1, WIRE_VARINT) => &mut year,
+                        (2, WIRE_VARINT) => &mut month,
+                        (3, WIRE_VARINT) => &mut day,
+                        _ => {
+                            skip_field(payload, &mut pos, wire_type).map_err(decode_error)?;
+                            continue;
+                        }
+                    };
+                    *target = read_varint(payload, &mut pos).map_err(decode_error)? as i32;
+                }
+                let (Ok(month), Ok(day)) = (u8::try_from(month), u8::try_from(day)) else {
+                    return Err(decode_error(format!("invalid date {year}-{month}-{day}")));
+                };
+                PyDate::new(py, year, month, day)
+                    .map(Bound::into_any)
+                    .map_err(|_| {
+                        // A partial date (year 0, month 0 or day 0) has no Python value.
+                        decode_error(format!("invalid or partial date {year}-{month}-{day}"))
+                    })
+            }
         }
     }
 
@@ -1102,12 +1197,26 @@ impl NativeCodec {
                 })?
                 .cast_into::<PyDict>()?,
         };
+        // The member set in each oneof, to refuse a second one.
+        let mut oneof_set: Vec<Option<usize>> = vec![None; plan.oneofs.len()];
         for (i, field) in plan.fields.iter().enumerate() {
             let Some(value) = values.get_item(fields[i].key.bind(py))? else {
                 continue;
             };
             if value.is_none() {
                 continue;
+            }
+            if let Some(group) = field.oneof {
+                if let Some(other) = oneof_set[group] {
+                    return Err(PyValueError::new_err(format!(
+                        "{}: oneof {} has several fields set: {}, {}",
+                        plan.full_name,
+                        plan.oneofs[group].name,
+                        fields[other].key.bind(py),
+                        fields[i].key.bind(py),
+                    )));
+                }
+                oneof_set[group] = Some(i);
             }
             self.encode_field(py, field, &value, buf, depth)
                 .map_err(|err| field_error(py, &plan.full_name, field, err))?;
@@ -1328,6 +1437,37 @@ impl NativeCodec {
             WellKnown::Struct => self.encode_struct(py, value, buf, depth)?,
             WellKnown::Value => self.encode_json_value(py, value, buf, depth)?,
             WellKnown::ListValue => self.encode_list_value(py, value, buf, depth)?,
+            WellKnown::Date => {
+                let parts = match value.cast::<PyDate>() {
+                    // A datetime is a date too: refuse it rather than drop its time.
+                    Ok(date) if value.cast::<PyDateTime>().is_err() => [
+                        date.get_year(),
+                        i32::from(date.get_month()),
+                        i32::from(date.get_day()),
+                    ],
+                    // A `{"year", "month", "day"}` dict, as protoruf 0.4 took it.
+                    _ if value.cast::<PyDict>().is_ok() => {
+                        let dict = value.cast::<PyDict>()?;
+                        let part = |key: &str| -> PyResult<i32> {
+                            dict.get_item(key)?.map_or(Ok(0), |v| v.extract::<i32>())
+                        };
+                        [part("year")?, part("month")?, part("day")?]
+                    }
+                    _ => {
+                        return Err(PyTypeError::new_err(format!(
+                            "expected datetime.date, got {}",
+                            type_name(value)
+                        )));
+                    }
+                };
+                for (number, part) in (1..).zip(parts) {
+                    // Proto3: zero parts (of a partial date) are not written.
+                    if part != 0 {
+                        write_tag(buf, number, WIRE_VARINT);
+                        write_varint(buf, part as i64 as u64);
+                    }
+                }
+            }
         }
         Ok(())
     }
@@ -1462,6 +1602,19 @@ impl NativeCodec {
         }
         Ok(())
     }
+}
+
+/// A oneof member was just read: the other members of its group are unset.
+fn clear_oneof(
+    members: &[usize],
+    set: usize,
+    slots: &mut [Slot<'_>],
+    payloads: &mut Vec<(usize, Cow<'_, [u8]>)>,
+) {
+    for &member in members.iter().filter(|&&m| m != set) {
+        slots[member] = Slot::Empty;
+    }
+    payloads.retain(|(field, _)| *field == set || !members.contains(field));
 }
 
 fn write_seconds_nanos(buf: &mut Vec<u8>, seconds: i64, nanos: i32) {
