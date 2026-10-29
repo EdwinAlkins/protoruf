@@ -1,6 +1,6 @@
 {
   "name": "@protoruf/node",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "High-performance JSON <-> Protobuf conversion, powered by Rust (Node.js native addon)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

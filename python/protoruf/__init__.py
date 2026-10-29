@@ -27,7 +27,7 @@ __all__ = [
     "OpenIntEnum",
     "Schema",
 ]
-__version__ = "0.5.2"
+__version__ = "0.5.3"
 
 class DescriptorCache:
     """Pre-decoded descriptor pool.
