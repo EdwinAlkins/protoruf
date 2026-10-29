@@ -5,6 +5,7 @@ from pathlib import Path
 
 from protoruf import (
     compile_proto,
+    compile_proto_from_sources,
     json_to_protobuf,
     load_descriptor,
     protobuf_to_json,
@@ -155,3 +156,16 @@ def test_protobuf_to_pydantic():
     assert result_msg.tags == ["pydantic"]
     assert result_msg.metadata.author == "Bob"
     assert result_msg.metadata.created_at == 9876543210
+
+
+def test_doubles_survive_json_exactly():
+    """Found by the `core_decode` fuzz target: the JSON parser read some doubles one bit
+    off, so `protobuf -> JSON -> protobuf` changed them (serde_json `float_roundtrip`)."""
+    descriptor = compile_proto_from_sources(
+        {"d.proto": 'syntax = "proto3"; package d; message D { double v = 1; float f = 2; }'},
+        root="d.proto",
+    )
+    for raw in ("382329ff9cf9ff1d", "0000000000000001", "ffffffffffffef7f", "9a9999999999b93f"):
+        data = b"\x09" + bytes.fromhex(raw)
+        text = protobuf_to_json(data, descriptor, message_type="d.D")
+        assert json_to_protobuf(text, descriptor, "d.D") == data, text

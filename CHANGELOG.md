@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- JSON → protobuf read some doubles one bit off (`3.4703528427759682e-164` became
+  `3.470352842775968e-164`), so a `double` did not always survive `protobuf -> JSON ->
+  protobuf`. serde_json now parses floats exactly (`float_roundtrip`): parsing a document
+  made only of doubles is about 18 % slower, a realistic message 0-2 %. The native codec
+  does not parse JSON and is unchanged.
+
 ### Packaging & CI
 
 - **Linux wheels are built with profile-guided optimization (PGO)**: an instrumented
@@ -17,6 +25,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   validated decoding 3-6 %. macOS and Windows wheels are unchanged.
 - `PGO check` workflow: builds the Linux wheel with and without PGO, checks the PGO
   wheel and times both (manual, or on pull requests touching the PGO files).
+
+### Tests
+
+- Fuzzing with cargo-fuzz (`fuzz/`, nightly, separate from the library build): `wire`
+  (wire primitives), `core_decode` (bytes → JSON → bytes → same JSON) and `core_json`
+  (text → protobuf → JSON, with a dictionary and seeds). It found the double above. The
+  native Python codec is not covered yet (PyO3 `extension-module` cannot be linked into a
+  fuzzing binary).
 
 ## [0.5.2] - 2026-10-29
 

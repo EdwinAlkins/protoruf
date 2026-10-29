@@ -1,0 +1,40 @@
+# Fuzz targets (cargo-fuzz, nightly): `cargo +nightly fuzz run <target>`. A crate of its
+# own, outside the library build: nothing here ships in a wheel or a package.
+[package]
+name = "protoruf-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+protoruf = { path = ".." }
+# Same version as protoruf, for its `MessageDescriptor` type.
+prost-reflect = "0.16"
+
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "wire"
+path = "fuzz_targets/wire.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "core_decode"
+path = "fuzz_targets/core_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "core_json"
+path = "fuzz_targets/core_json.rs"
+test = false
+doc = false
+bench = false
